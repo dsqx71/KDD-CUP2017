@@ -1,0 +1,23 @@
+### Ipython notebook
+*.ipynb*
+
+### cython extension
+*.c
+*.so
+
+### Pycharm project files
+*.idea
+
+### Python bytecode files
+*.pyc
+*pycache*
+
+### JSON file
+.json
+
+### txt file
+.txt
+.csv
+
+### Others
+.DS_Store
