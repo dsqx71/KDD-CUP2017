@@ -4,7 +4,7 @@ from numba import jit
 import os
 import pandas as pd
 from config import cfg
-from util import ReadJson, WriteJson
+from util import ReadJson, WriteJson, ReadRawdata
 
 @jit
 def ExtractTrajectoryRawdata(data, trajectory_feature, time_interval):
