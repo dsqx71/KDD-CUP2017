@@ -13,11 +13,11 @@
 *pycache*
 
 ### JSON file
-.json
+*.json
 
 ### txt file
-.txt
-.csv
+*.txt
+*.csv
 
 ### Others
-.DS_Store
+*.DS_Store
