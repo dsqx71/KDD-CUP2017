@@ -11,3 +11,10 @@
 - ```feature```: functions concern feature preprocessing
 
 
+#### Get started
+
+- Download [dataset](https://tianchi.aliyun.com/competition/information.htm?spm=5176.100068.5678.2.Uwgmr3&raceId=231597),
+ unpack and move them to ```data.dataSets``` directory
+- Check and edit all the fields related to dataset and experiment settings in ```config.py```
+
+

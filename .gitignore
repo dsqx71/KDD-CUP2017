@@ -17,7 +17,7 @@
 
 ### txt file
 *.txt
-*.csvg
+*.csv
 
 ### Others
 *.DS_Store

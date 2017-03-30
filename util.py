@@ -57,6 +57,7 @@ def ReadRawdata():
     trajectory = pd.concat([trajectory_train, trajectory_test], ignore_index=True)
     volume = pd.concat([volume_train, volume_test], ignore_index=True)
     weather = pd.concat([weather_train, weather_test], ignore_index=True)
+    weather['hour'] = weather['hour'].astype(float)
 
     # convert str to datetime
     trajectory['starting_time'] = trajectory['starting_time'].map(lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S"))

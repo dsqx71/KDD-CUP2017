@@ -2,15 +2,15 @@ from util import GetTimeslot
 from datetime import datetime, timedelta
 from numba import jit
 import os
-import platform
+import logging
 import pandas as pd
-import multiprocessing as mp
 from config import cfg
 from util import ReadJson, WriteJson, ReadRawdata
 
 @jit
 def ExtractTrajectoryRawdata(data, trajectory_feature, time_interval):
 
+    logging.info("Extracting features from trajectroy rawdata...")
     for i in range(len(data)):
 
         intersection = data.loc[i]['intersection_id']
@@ -41,9 +41,12 @@ def ExtractTrajectoryRawdata(data, trajectory_feature, time_interval):
             trajectory_feature[link_name][time_slot]['time'] = trajectory_feature[link_name][time_slot].get('num',0) + travel_time
             trajectory_feature[link_name][time_slot]['data_miss'] = 0
 
+    return trajectory_feature
+
 @jit
 def ExtractVolumeRawdata(data, volume_feature, time_interval):
 
+    logging.info("Extracting features from volume rawdata...")
     # tollgate feature
     for i in range(len(data)):
         tollgate = 'tollgate{}'.format(data.loc[i]['tollgate_id'])
@@ -65,9 +68,12 @@ def ExtractVolumeRawdata(data, volume_feature, time_interval):
         volume_feature[tollgate][time_slot]['num'] = volume_feature[tollgate][time_slot].get('num', 0) + 1
         volume_feature[tollgate][time_slot]['data_miss'] = 0
 
+    return volume_feature
+
 @jit
 def ExtractWeatherRawdata(weather, weather_feature, time_interval):
 
+    logging.info("Extracting features from weather rawdata...")
     data = weather
     for i in range(len(data)):
         date = data.loc[i]['date']
@@ -79,9 +85,12 @@ def ExtractWeatherRawdata(weather, weather_feature, time_interval):
             time = time + timedelta(minutes=time_interval)
     keys = weather_feature.keys()
     assert len(set(keys)) == len(keys)
+    return weather_feature
 
 @jit
 def PreprocessingRawdata(force_update=False):
+
+    logging.info("Started to prepare data...")
 
     # file path
     volume_feature_file = os.path.join(cfg.data.feature_dir, 'volume_feature.json')
@@ -119,17 +128,10 @@ def PreprocessingRawdata(force_update=False):
         # Extract features
         trajectory, volume, weather, link, route = ReadRawdata()
 
-        # multiprocessing setting
-        if platform.system() == 'Windows':
-            mp.freeze_support()
-
         # Extract feature
-        pool = mp.Pool()
-        pool.apply_async(ExtractTrajectoryRawdata, (trajectory, trajectory_feature, cfg.time.time_interval))
-        pool.apply_async(ExtractVolumeRawdata, (volume, volume_feature, cfg.time.time_interval))
-        pool.apply_async(ExtractWeatherRawdata, (weather, weather_feature, cfg.time.time_interval))
-        pool.close()
-        pool.join()
+        trajectory_feature = ExtractTrajectoryRawdata(trajectory, trajectory_feature, cfg.time.time_interval)
+        volume_feature = ExtractVolumeRawdata(volume, volume_feature, cfg.time.time_interval)
+        weather_feature = ExtractWeatherRawdata(weather, weather_feature, cfg.time.time_interval)
 
         # Save features
         WriteJson(volume_feature_file, volume_feature)
@@ -141,6 +143,7 @@ def PreprocessingRawdata(force_update=False):
 @jit
 def ReformatData(volume_feature, trajectory_feature, weather_feature):
 
+    logging.info("Convert data to pandas DataFrame format...")
     data = trajectory_feature.copy()
     data['weather'] = weather_feature
 
