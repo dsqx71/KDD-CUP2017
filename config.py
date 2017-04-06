@@ -139,13 +139,13 @@ cfg.model.node_type = {# links
 
 
 # output
-cfg.model.task1_output = {'tollgate1': 2,
+cfg.model.task1_output = {'A': ['tollgate2', 'tollgate3'],
+                          'B': ['tollgate1', 'tollgate3'],
+                          'C': ['tollgate1', 'tollgate3']}
+
+cfg.model.task2_output = {'tollgate1': 2,
                 'tollgate2': 1,
                 'tollgate3': 2}
-
-cfg.model.task2_output = {'A': ['tollgate2', 'tollgate3'],
-                'B': ['tollgate1', 'tollgate3'],
-                'C': ['tollgate1', 'tollgate3']}
 
 # route
 cfg.model.route = {'A': [[110, 123, 107, 108, 120, 117],

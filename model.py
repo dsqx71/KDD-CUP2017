@@ -185,10 +185,10 @@ def LSTM():
 
         # Output
         prediction = {}
-        with tf.variable_scope("task1_net"):
+        with tf.variable_scope("task2_net"):
             for node in task1_output:
                 data  = []
-                num_output = task1_output[node]
+                num_output = task2_output[node]
 
                 # concat hidden layers of all revelent link
                 for key in link[node]:
@@ -204,8 +204,7 @@ def LSTM():
         with tf.variable_scope("task1_net"):
             for node in task2_output:
                 for i in range(2):
-                    target = task2_output[node][i]
-
+                    target = task1_output[node][i]
                     data = []
                     # concat hidden layers of all revelent link
                     num_path = len(route[node])

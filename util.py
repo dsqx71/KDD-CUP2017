@@ -65,8 +65,3 @@ def ReadRawdata():
 
     return trajectory, volume, weather, link, route
 
-def TrainTimeslot():
-    # training time range
-
-    return train_timelsot
-
