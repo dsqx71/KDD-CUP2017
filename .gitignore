@@ -6,7 +6,8 @@
 *.so
 
 ### Pycharm project files
-*.idea
+*.idea*
+*.xml
 
 ### Python bytecode files
 *.pyc
