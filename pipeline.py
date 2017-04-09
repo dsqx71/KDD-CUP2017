@@ -21,7 +21,7 @@ def pipeline(args):
     # Filling missing values and convert data to numpy array
     data_train = feature.FillingMissingData(data_train)
     data_test = feature.FillingMissingData(data_test)
-
+    
     ### step2 : training
 
 if __name__ == '__main__':
