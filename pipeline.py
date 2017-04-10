@@ -1,4 +1,5 @@
 import feature
+import dataloader
 import argparse
 import logging
 
@@ -21,8 +22,10 @@ def pipeline(args):
     # Filling missing values and convert data to numpy array
     data_train = feature.FillingMissingData(data_train)
     data_test = feature.FillingMissingData(data_test)
-    
+
     ### step2 : training
+    prediction, loss = model.GetLSTM()
+    
 
 if __name__ == '__main__':
     # parse args

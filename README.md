@@ -7,6 +7,7 @@
 - ```util```: I/O and other utility functions
 - ```data.dataSets```:  rawdata, in csv format
 - ```data.features```:  temporal data, in json format
+- ```dataloader```: data iterator
 - ```config```: model config and dataset description
 - ```feature```: functions concern feature preprocessing
 

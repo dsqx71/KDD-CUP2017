@@ -229,19 +229,15 @@ def GetLabels(data):
     labels : dict
     """
     labels = {}
-    labels['task1'] = {}
-    labels['task2'] = {}
 
     for intersection in cfg.model.task1_output:
-        labels['task1'][intersection] = {}
         for tollgate in cfg.model.task1_output[intersection]:
-            labels['task1'][intersection][tollgate] = (data[intersection]['time_{}'.format(tollgate)] /
-                                                       data[intersection]['num_{}'.format(tollgate)]).values
+            labels['{}_{}'.format(intersection, tollgate)] = (data[intersection]['time_{}'.format(tollgate)] /
+                                                              data[intersection]['num_{}'.format(tollgate)]).values
 
     for tollgate in cfg.model.task2_output:
-        labels['task2'][tollgate] = {}
         for direction in range(cfg.model.task2_output[tollgate]):
-            labels['task2'][tollgate][direction] = data[tollgate]['volume_num_direction:{}'.format(direction)].values
+            labels['{}_{}'.format(tollgate, direction)] = data[tollgate]['volume_num_direction:{}'.format(direction)].values
     return labels
 
 def SplitData(data):
