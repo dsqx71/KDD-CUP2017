@@ -1,7 +1,15 @@
+from  config import cfg
+import pipeline
+import util
 import feature
+import model
 import dataloader
-import argparse
+
+import tensorflow as tf
 import logging
+import numpy as np
+import pandas as pd
+import os
 
 def pipeline(args):
     ### step1 : prepare data
@@ -70,16 +78,16 @@ def pipeline(args):
     for epoch in range(num_epoch):
     
         loader.reset()
-        tic = time.begin()
+        tic = time.time()
         
         for batch in loader:
             data = batch.data
             data.update(batch.label)
             data['learning_rate:0'] = lr
-            _, loss = sess.run([optimizer, loss], feed_dict=data)
+            _, error = sess.run([optimizer, loss], feed_dict=data)
         
-        toc = time.begin()
-        logging.info("Epoch[{}] Speed:{:.2f} samples/sec Overal loss={:.5f}".format(epoch, loader.data_num/(toc-tic), loss))
+        toc = time.time()
+        logging.info("Epoch[{}] Speed:{:.2f} samples/sec Overal loss={:.5f}".format(epoch, loader.data_num/(toc-tic), error.tolist()))
         
         if epoch % 10 == 0:
             logging.info("Saving model of Epoch[{}]...".format(epoch))

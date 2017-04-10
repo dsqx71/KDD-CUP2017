@@ -3,14 +3,15 @@
 
 #### Project Organization
 
-- ```model```: machine learning models
+- ```model```: Machine learning models
 - ```util```: I/O and other utility functions
 - ```data.checkpoint```: Tensorflow model files
-- ```data.dataSets```:  rawdata, in csv format
-- ```data.features```:  temporal data, in json format
-- ```dataloader```: data iterator
-- ```config```: model config and dataset description
-- ```feature```: functions concern feature preprocessing
+- ```data.dataSets```:  Rawdata, in csv format
+- ```data.features```:  Temporal data, in json format
+- ```data.prediction```: Prediction results
+- ```dataloader```: Data iterator
+- ```config```: Model config and dataset description
+- ```feature```: Functions concern feature preprocessing
 
 
 #### Get started
