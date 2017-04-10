@@ -1,5 +1,8 @@
 from collections import namedtuple
+from datetime import datetime, timedelta
 from random import shuffle
+from config import cfg
+import numpy as np
 DataBatch = namedtuple('DataBatch', ['data', 'label','aux'])
 
 class DataLoader(object):
@@ -9,10 +12,13 @@ class DataLoader(object):
         self.data = data
         self.label = label
         self.batchsize = batchsize
-        self.time = np.array(time)
         self.is_train = is_train
         self.num_slots = 2 * 60 // cfg.time.time_interval
-        
+        self.time = []
+        for item in time:
+            tmp = datetime.strptime(item, "%Y-%m-%d %H:%M:%S")
+            self.time.append((tmp.hour*60+tmp.minute) // cfg.time.time_interval)
+        self.time = np.array(self.time)
         # data index
         self.index = 0
         if is_train:
@@ -33,15 +39,16 @@ class DataLoader(object):
         self.index = 0
     
     def getdata(self, list_index):    
-        data = {key:[] for key in self.data}
+        data = {}
         for key in self.data:
+            data[key+':0'] = []
             for index in list_index:
                 if key != 'weather':
-                    data[key].append(self.data[key][index: index + self.num_slots])
+                    data[key+':0'].append(self.data[key][index: index + self.num_slots])
                 else:
-                    data[key].append(self.data[key][index: index + self.num_slots*2])
-            data[key] = np.array(data[key])
-        data['time'] = self.time[list_index]
+                    data[key+':0'].append(self.data[key][index: index + self.num_slots*2])
+            data[key+':0'] = np.array(data[key+':0'])
+        data['time'+':0'] = self.time[list_index]
         return data
     
     def getlabel(self, list_index):
@@ -50,11 +57,11 @@ class DataLoader(object):
         
         label = {}
         for key in self.label:
-            label[key] = []
+            label[key+':0'] = []
             for index in list_index:
                 data = self.label[key][index+self.num_slots : index + 2*self.num_slots]
-                label[key].append(data)
-            label[key] = np.array(label[key])
+                label[key+':0'].append(data)
+            label[key+':0'] = np.array(label[key+':0'])
         
         return label
     

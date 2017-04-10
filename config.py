@@ -10,6 +10,7 @@ cfg.model = edict()
 #### data directory
 cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/'
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
+cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 
 #### time
 cfg.time.time_interval = 20

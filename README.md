@@ -5,6 +5,7 @@
 
 - ```model```: machine learning models
 - ```util```: I/O and other utility functions
+- ```data.checkpoint```: Tensorflow model files
 - ```data.dataSets```:  rawdata, in csv format
 - ```data.features```:  temporal data, in json format
 - ```dataloader```: data iterator

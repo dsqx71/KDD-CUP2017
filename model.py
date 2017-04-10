@@ -8,10 +8,11 @@ def FC(x, in_dim, out_dim, name, activation='relu'):
     """
     W = tf.get_variable(name=name+'_weight', 
                         shape=[in_dim, out_dim],
-                        initializer=tf.contrib.layers.xavier_initializer(uniform=True, 
-                                                                         seed=None, 
-                                                                         dtype=tf.float32))
+                        trainable=True,
+                        initializer=tf.contrib.layers.variance_scaling_initializer(factor=8.0, 
+                                    mode='FAN_IN', uniform=False, seed=None, dtype=tf.float32)) 
     b = tf.get_variable(name=name+'_bias', shape=[out_dim], initializer=tf.zeros_initializer)
+
     if activation == 'relu':
         y = tf.nn.relu(tf.matmul(x, W) + b, name=name + '_relu')
     elif activation == 'softmax':
@@ -50,7 +51,13 @@ def ExtractFeature(data, in_dim, out_dim, num_hidden, num_layer):
     return data
 
 def L1_loss(name, data, label, scale=1.0):
-    loss = tf.abs(data - label, name) / label * scale
+    """
+     Sparse L1 regression Loss
+    """
+    condition = tf.sign(label)
+    label = tf.where(condition > 0, label, data + 1e-5)
+    loss =  tf.abs(data - label, name) / label * scale
+
     return loss
 
 def GetLSTM(input_size):
@@ -109,12 +116,12 @@ def GetLSTM(input_size):
 
     ### Input data and RNN cell
     time = tf.placeholder(tf.int32, shape=(batch_size), name = 'time')
-    weather = tf.placeholder(tf.float32, shape=(batch_size, encoder_num_timesteps+ decoder_num_timesteps, input_size['weather']))    
+    weather = tf.placeholder(tf.float32, shape=(batch_size, encoder_num_timesteps+ decoder_num_timesteps, input_size['weather']),name='weather')    
     embeddings = {}
     for node in link:
         # Input, input shape vary from node to node
         inputs[node] = tf.placeholder(tf.float32, shape=(batch_size, encoder_num_timesteps, input_size[node]), name = node)
-        embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -1.0, 1.0), name= node + '_embedding')
+        embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -2.0, 2.0), name= node + '_embedding', trainable=True)
         
         # LSTM Cell
         encoder_single_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True)
@@ -137,7 +144,8 @@ def GetLSTM(input_size):
             for node in link:
                 input_data = inputs[node][:, timestep, :]
                 embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)
-                data = array_ops.concat(concat_dim=1, values=[input_data, embedding])  
+                weather_now = weather[:, timestep, :]
+                data = array_ops.concat(concat_dim=1, values=[input_data, embedding, weather_now])  
                 # concat all cells and hidden layers of relevant nodes
                 num_intop = len(link[node])
                 new_cell  = [[] for i in range(rnn_num_layers)]
@@ -179,7 +187,7 @@ def GetLSTM(input_size):
                         states.append(tmp)
 
                 # RNN
-                with tf.variable_scope('Encoder.LSTM', initializer=tf.orthogonal_initializer(gain=1.00)) as scope:
+                with tf.variable_scope('Encoder.LSTM', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
                     if flag == True:
                         tf.get_variable_scope().reuse_variables()
                     tmp, states_fw[node] = encoder_nodes_fw[node](data, states)
@@ -192,9 +200,9 @@ def GetLSTM(input_size):
             time_now = (time + timestep) % embedding_num
             for node in link:
                 input_data = output_fw[node][-1]
-                embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)
-                data = array_ops.concat(concat_dim=1, values=[input_data, embedding])                         
-
+                embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)                      
+                weather_now = weather[:, timestep, :]
+                data = array_ops.concat(concat_dim=1, values=[input_data, embedding, weather_now])
                 # concat in_link
                 num_intop = len(link[node])
                 new_cell  = [[] for i in range(rnn_num_layers)]
@@ -223,7 +231,7 @@ def GetLSTM(input_size):
                                                num_layer = recursive_num_layers)
                         states.append(tmp)
 
-                with tf.variable_scope('Decoder.LSTM', initializer=tf.orthogonal_initializer(gain=1.00)) as scope:
+                with tf.variable_scope('Decoder.LSTM', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
                     if flag == True:
                         tf.get_variable_scope().reuse_variables()
                     tmp, states_fw[node] = decoder_nodes_fw[node](data, states)
