@@ -64,4 +64,3 @@ def ReadRawdata():
     volume['time'] = volume['time'].map(lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S"))
 
     return trajectory, volume, weather, link, route
-

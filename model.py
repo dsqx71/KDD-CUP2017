@@ -55,12 +55,16 @@ def L1_loss(name, data, label, scale=1.0):
      Sparse L1 regression Loss
     """
     condition = tf.sign(label)
-    label = tf.where(condition > 0, label, data + 1e-5)
+    label = tf.where(condition > 0, label, data + 1E-5)
     loss =  tf.abs(data - label, name) / label * scale
-
+    zeros = tf.constant(0, dtype=tf.float32, shape=loss.get_shape())
+    loss = tf.where(condition > 0, loss, zeros)
+    loss = tf.reduce_sum(loss)
+    num_valid = tf.reduce_sum(tf.cast(condition, tf.float32))
+    loss = loss / num_valid
     return loss
 
-def GetLSTM(input_size):
+def GetLSTM(input_size, is_train=True):
 
     link = cfg.model.link
     route = cfg.model.route
@@ -121,6 +125,11 @@ def GetLSTM(input_size):
     for node in link:
         # Input, input shape vary from node to node
         inputs[node] = tf.placeholder(tf.float32, shape=(batch_size, encoder_num_timesteps, input_size[node]), name = node)
+        if is_train:
+            inputs[node] = inputs[node] + \
+                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-5) * inputs[node] + \
+                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-3)
+
         embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -2.0, 2.0), name= node + '_embedding', trainable=True)
         
         # LSTM Cell
@@ -137,7 +146,7 @@ def GetLSTM(input_size):
 
     # Build Graph
     flags = {value : False for value in node_type.values()}
-    with tf.variable_scope("RNN"):
+    with tf.variable_scope("RNN", regularizer=tf.contrib.layers.l2_regularizer(0.0004)):
         flag=False
         for timestep in range(encoder_num_timesteps):
             time_now = (time + timestep) % embedding_num
@@ -275,6 +284,6 @@ def GetLSTM(input_size):
                 cost = L1_loss(data=prediction[key], label=labels[key], scale=1.0, name=key)
                 tf.summary.scalar('Loss_{}'.format(key), cost)
                 loss.append(cost)
-            loss = array_ops.concat(concat_dim=1, values=loss, name='concat_all_loss')
+            loss = tf.pack(loss)
 
     return prediction, loss
