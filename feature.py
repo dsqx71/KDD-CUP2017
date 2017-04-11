@@ -204,6 +204,9 @@ def CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, lin
     for node in link_feature:
         data[node] = pd.concat([data[node], pd.DataFrame(link_feature[node]).T], axis='columns')
 
+    # subduce mean and div std
+    for node in data:
+        data[node] = (data[node] - data[node].mean()) / data[node].std()
     return data
 
 def FillingMissingData(data):
@@ -243,10 +246,12 @@ def GetLabels(data):
 def SplitData(data):
 
     data_train = {}
+    data_validation = {}
+    data_test = {}
+
     for node in data:
         data_train[node] = data[node].loc[cfg.time.train_timeslots]
-    data_test = {}
-    for node in data:
+        data_validation[node] = data[node].loc[cfg.time.validation_timeslots]
         data_test[node] = data[node].loc[cfg.time.test_timeslots]
 
-    return data_train, data_test
+    return data_train, data_validation, data_test

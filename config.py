@@ -12,6 +12,8 @@ cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 
+cfg.data.validation_ratio = 0.10
+
 #### time
 cfg.time.time_interval = 20
 
@@ -47,6 +49,11 @@ for slot in range(int(cfg.time.trajectory_slots)):
 
 cfg.time.all_timeslots = cfg.time.train_timeslots.copy()
 cfg.time.all_timeslots.extend(cfg.time.test_timeslots)
+
+#split dataset into training set and validation set
+validation_start = len(cfg.time.train_timeslots) - int(cfg.data.validation_ratio * len(cfg.time.train_timeslots))
+cfg.time.validation_timeslots = cfg.time.train_timeslots[validation_start:]
+cfg.time.train_timeslots = cfg.time.train_timeslots[:validation_start]
 
 # padding timeslots
 for i in range(18, 25):
