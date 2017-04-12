@@ -15,7 +15,7 @@
 - ```util```: I/O and other utility functions
 
 #### Requirements
-- Tensorflow 0.8
+- Tensorflow 1.0
 - python 3.5
 
 #### Get started

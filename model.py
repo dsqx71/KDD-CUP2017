@@ -12,7 +12,7 @@ def FC(x, in_dim, out_dim, name, activation='relu', is_training=True):
 
     y = tf.matmul(x, W) + b
     y = tf.contrib.layers.batch_norm(y, 
-                                    decay=0.99,
+                                    decay=0.95,
                                     epsilon=1E-5,
                                     center=True, 
                                     scale=True, 
@@ -94,7 +94,7 @@ def GetLSTM(batch_size, input_size, is_training=True):
     rnn_num_layers = 2
     rnn_dim_hidden = 16
 
-    feature_num_layers = 4
+    feature_num_layers = 2
     feature_dim_hidden = 16
     feature_dim_output = 16
 
@@ -139,14 +139,14 @@ def GetLSTM(batch_size, input_size, is_training=True):
         inputs[node] = tf.placeholder(tf.float32, shape=(batch_size, encoder_num_timesteps, input_size[node]), name = node)
         if is_training:
             inputs[node] = inputs[node] + \
-                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=0.03) * inputs[node] + \
-                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=0.003)
+                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-3) * inputs[node] + \
+                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-4)
 
         embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -1.0, 1.0), name= node + '_embedding', trainable=True)
         
         # LSTM Cell
-        encoder_single_cell_fw = BNLSTMCell(rnn_dim_hidden, is_training)#tf.nn.rnn_cell.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) 
-        decoder_single_cell_fw = BNLSTMCell(rnn_dim_hidden, is_training)#tf.nn.rnn_cell.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True)
+        encoder_single_cell_fw = tf.contrib.rnn.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) # BNLSTMCell(rnn_dim_hidden, is_training) 
+        decoder_single_cell_fw = tf.contrib.rnn.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) # BNLSTMCell(rnn_dim_hidden, is_training)
         
         encoder_nodes_fw[node] = tf.nn.rnn_cell.MultiRNNCell([encoder_single_cell_fw] * rnn_num_layers)
         decoder_nodes_fw[node] = tf.nn.rnn_cell.MultiRNNCell([decoder_single_cell_fw] * rnn_num_layers)
@@ -160,7 +160,7 @@ def GetLSTM(batch_size, input_size, is_training=True):
     flags = {value : False for value in node_type.values()}
     with tf.variable_scope("RNN", 
                             regularizer=tf.contrib.layers.l2_regularizer(0.0005),
-                            initializer=tf.contrib.layers.variance_scaling_initializer(factor=0.1, 
+                            initializer=tf.contrib.layers.variance_scaling_initializer(factor=8, 
                                     mode='FAN_IN', uniform=False, seed=None, dtype=tf.float32)):
         flag=False
         for timestep in range(encoder_num_timesteps):
@@ -213,7 +213,7 @@ def GetLSTM(batch_size, input_size, is_training=True):
                         states.append(tmp)
 
                 # RNN
-                with tf.variable_scope('Encoder.LSTM', initializer=tf.orthogonal_initializer(gain=1.00)) as scope:
+                with tf.variable_scope('Encoder.LSTM', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
                     if flag == True:
                         tf.get_variable_scope().reuse_variables()
                     tmp, states_fw[node] = encoder_nodes_fw[node](data, states)
@@ -258,7 +258,7 @@ def GetLSTM(batch_size, input_size, is_training=True):
                                                is_training=is_training)
                         states.append(tmp)
 
-                with tf.variable_scope('Decoder.LSTM', initializer=tf.orthogonal_initializer(gain=1.00)) as scope:
+                with tf.variable_scope('Decoder.LSTM', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
                     if flag == True:
                         tf.get_variable_scope().reuse_variables()
                     tmp, states_fw[node] = decoder_nodes_fw[node](data, states)

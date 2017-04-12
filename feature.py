@@ -204,9 +204,6 @@ def CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, lin
     for node in link_feature:
         data[node] = pd.concat([data[node], pd.DataFrame(link_feature[node]).T], axis='columns')
 
-    # subduce mean and div std
-    for node in data:
-        data[node] = (data[node] - data[node].mean()) / data[node].std()
     return data
 
 def FillingMissingData(data):
@@ -214,11 +211,16 @@ def FillingMissingData(data):
     Parameters
     ----------
     data :  dict of Pandas.DataFrame,
+
+    Returns
+    ----------
+    data : dict of numpy array
     """
     logging.info("Filling missing data...")
+    
     # TODO: Need more experiements to find proper filling values
     for key in data:
-        data[key] = data[key].fillna(-1).values
+        data[key] = data[key].fillna(-1)
     return data
 
 def GetLabels(data):
@@ -229,29 +231,48 @@ def GetLabels(data):
 
     Returns
     -------
-    labels : dict
+    labels : dict of Pandas Series
     """
     labels = {}
 
     for intersection in cfg.model.task1_output:
         for tollgate in cfg.model.task1_output[intersection]:
             labels['{}_{}'.format(intersection, tollgate)] = (data[intersection]['time_{}'.format(tollgate)] /
-                                                              data[intersection]['num_{}'.format(tollgate)]).values
+                                                              data[intersection]['num_{}'.format(tollgate)])
 
     for tollgate in cfg.model.task2_output:
         for direction in range(cfg.model.task2_output[tollgate]):
-            labels['{}_{}'.format(tollgate, direction)] = data[tollgate]['volume_num_direction:{}'.format(direction)].values
+            labels['{}_{}'.format(tollgate, direction)] = data[tollgate]['volume_num_direction:{}'.format(direction)]
     return labels
 
-def SplitData(data):
-
+def SplitData(data, label):
+    """
+    Split Data into training set, validation set, and testing set
+    """
     data_train = {}
     data_validation = {}
     data_test = {}
+
+    label_train = {}
+    label_validation = {}
+    label_test = {}
 
     for node in data:
         data_train[node] = data[node].loc[cfg.time.train_timeslots]
         data_validation[node] = data[node].loc[cfg.time.validation_timeslots]
         data_test[node] = data[node].loc[cfg.time.test_timeslots]
 
-    return data_train, data_validation, data_test
+    for node in label:
+        label_train[node] = label[node].loc[cfg.time.train_timeslots]
+        label_validation[node] = label[node].loc[cfg.time.validation_timeslots]
+        label_test[node] = label[node].loc[cfg.time.test_timeslots]
+
+    return data_train, data_validation, data_test, label_train, label_validation, label_test
+
+def Standardize(data):
+    """
+    subduce mean and div std
+    """
+    for node in data:
+        data[node] = (data[node] - data[node].mean()) / data[node].std()
+    return data

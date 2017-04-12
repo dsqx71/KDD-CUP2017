@@ -9,8 +9,9 @@ class DataLoader(object):
     
     def __init__(self, data, label, batchsize, time, is_train=True):
         # setting
-        self.data = data
-        self.label = label
+        self.data = {key:data[key].values for key in data}
+        self.label = {key:label[key].values for key in label}
+
         self.batchsize = batchsize
         self.is_train = is_train
         self.num_slots = 2 * 60 // cfg.time.time_interval

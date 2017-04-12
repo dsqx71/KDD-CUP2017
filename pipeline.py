@@ -17,13 +17,13 @@ def pipeline(args):
 
     ### Experiment setting
     exp_name = 'RNN_Exp1'
-    num_epoch = 600
+    num_epoch = 1000
     force_update = args.update_feature
     resume_epoch = args.resume_epoch
     lr = args.lr
 
-    save_interval = 10
-    lr_decay = 0.8
+    save_interval = 20
+    lr_decay = 0.90
     batchsize= 128
     num_tf_thread = 8
 
@@ -35,21 +35,21 @@ def pipeline(args):
 
     # Combine all basic features
     data = feature.CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, link_feature)
+    label = feature.GetLabels(data)
+
+    # Suduce mean and div std
+    data = feature.Standardize(data)
+
+    # Filling missing values and convert data
+    data = feature.FillingMissingData(data)
 
     # Split data into training data and testing data
-    data_train, data_validation, data_test = feature.SplitData(data)
-
-    # Get labels
-    labels_train = feature.GetLabels(data_train)
-    labels_validation = feature.GetLabels(data_validation)
-
-    # Filling missing values and convert data to numpy array
-    data_train = feature.FillingMissingData(data_train)
-    data_test =  feature.FillingMissingData(data_test)
+    data_train, data_validation, data_test, label_train, label_validation, label_test = \
+        feature.SplitData(data, label)
 
     # Get data iterator
     loader = dataloader.DataLoader(data=data_train,
-                        label = labels_train, 
+                        label = label_train, 
                         batchsize = batchsize,
                         time= cfg.time.train_timeslots,
                         is_train=True)
@@ -102,6 +102,9 @@ def pipeline(args):
         optimizer = tf.get_collection('optimizer')[0]
         loss = tf.get_collection('loss')[0]
 
+    # Instantiate a SummaryWriter to output summaries and the Graph.
+    summary_writer = tf.summary.FileWriter(summary_dir, sess.graph)
+
     #training
     logging.info("Starting training...")
     for epoch in range(resume_epoch+1, num_epoch):
@@ -139,8 +142,7 @@ def pipeline(args):
     loging.info("Optimization Finished!")
     sess.close()
     
-    # Instantiate a SummaryWriter to output summaries and the Graph.
-    summary_writer = tf.summary.FileWriter(summary_dir, sess.graph)
+    
 
 if __name__ == '__main__':
     # parse args
