@@ -64,6 +64,7 @@ for i in range(18, 25):
         if time not in cfg.time.all_timeslots:
             cfg.time.all_timeslots.append(time)
 
+cfg.time.validation_timeslots.sort()
 cfg.time.train_timeslots.sort()
 cfg.time.test_timeslots.sort()
 cfg.time.all_timeslots.sort()

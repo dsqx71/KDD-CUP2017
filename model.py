@@ -1,23 +1,25 @@
-from tensorflow.python.ops import array_ops
 from bnlstm import BNLSTMCell
 from config import cfg
 import tensorflow as tf
 
-def FC(x, in_dim, out_dim, name, activation='relu', is_training=True):
+def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=True):
     """
     Fully connect
     """
     W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim]) 
-    b = tf.get_variable(name=name+'_bias', shape=[out_dim], initializer=tf.zeros_initializer)
+    b = tf.get_variable(name=name+'_bias', shape=[out_dim], initializer=tf.zeros_initializer())
 
     y = tf.matmul(x, W) + b
-    y = tf.contrib.layers.batch_norm(y, 
-                                    decay=0.95,
-                                    epsilon=1E-5,
-                                    center=True, 
-                                    scale=True, 
-                                    is_training=is_training,
-                                    scope=name+'_bn')
+
+    if with_bn:
+        y = tf.contrib.layers.batch_norm(y, 
+                                        decay=0.95,
+                                        epsilon=1E-5,
+                                        center=True, 
+                                        scale=True, 
+                                        fused=True,
+                                        is_training=is_training,
+                                        scope=name+'_bn')
     if activation == 'relu':
         y = tf.nn.relu(y, name=name + '_relu')
     
@@ -47,21 +49,14 @@ def MultiLayerFC(name, data, in_dim, out_dim, num_hidden, num_layer, activation=
             activation=activation, is_training=is_training)
     
     return data
-    
-def RecursiveNetwork(cell, hidden, in_dim, out_dim, num_hidden, num_layer, is_training=True):
-
-    cell = MultiLayerFC('RecursiveNetwork', cell, in_dim, out_dim, num_hidden, num_layer,is_training=is_training)
-    tf.get_variable_scope().reuse_variables()
-    hidden = MultiLayerFC('RecursiveNetwork', hidden, in_dim, out_dim, num_hidden, num_layer,is_training=is_training)
-    state = (cell, hidden)
-    return state
 
 def ExtractFeature(data, in_dim, out_dim, num_hidden, num_layer, is_training=True):
     
     mask = MultiLayerFC('InputGate', data=data, in_dim=in_dim, out_dim=in_dim, 
                         num_hidden=num_hidden, num_layer=num_layer, activation='sigmoid',is_training=is_training)
     data = data * mask
-    data = MultiLayerFC('ExtractFeature', data, in_dim, out_dim, num_hidden, num_layer,is_training=is_training)
+    data = MultiLayerFC('ExtractFeature', data, in_dim, out_dim, num_hidden, num_layer, is_training=is_training)
+    
     return data
 
 def L1_loss(name, data, label, scale=1.0):
@@ -78,7 +73,7 @@ def L1_loss(name, data, label, scale=1.0):
     loss = loss / num_valid
     return loss
 
-def GetLSTM(batch_size, input_size, is_training=True):
+def GetRNN(batch_size, input_size):
 
     link = cfg.model.link
     route = cfg.model.route
@@ -91,15 +86,16 @@ def GetLSTM(batch_size, input_size, is_training=True):
     timestep_interval = cfg.time.time_interval
     output_interval = 20
 
-    rnn_num_layers = 2
+    rnn_num_layers = 4
     rnn_dim_hidden = 16
 
     feature_num_layers = 2
-    feature_dim_hidden = 16
+    feature_dim_hidden = 32
     feature_dim_output = 16
 
     recursive_num_layers = 1
     recursive_dim_hidden = 16
+    recursive_dim_output = 16
 
     embedding_num = 72
     embedding_feature_num = 8
@@ -117,7 +113,7 @@ def GetLSTM(batch_size, input_size, is_training=True):
 
     ### label
     labels = {}
-
+    is_training = tf.placeholder(name='is_training', dtype=tf.bool, shape=[])
     # task1
     for key in task1_output:
         for item in task1_output[key]:
@@ -137,29 +133,28 @@ def GetLSTM(batch_size, input_size, is_training=True):
     for node in link:
         # Input, input shape vary from node to node
         inputs[node] = tf.placeholder(tf.float32, shape=(batch_size, encoder_num_timesteps, input_size[node]), name = node)
-        if is_training:
-            inputs[node] = inputs[node] + \
-                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-3) * inputs[node] + \
-                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-4)
+        inputs[node] = tf.cond(is_training, 
+                           lambda : inputs[node] + \
+                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-2) * inputs[node] + \
+                           tf.random_normal(inputs[node].get_shape(), mean=0, stddev=1E-3),
+                           lambda : inputs[node])
 
         embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -1.0, 1.0), name= node + '_embedding', trainable=True)
         
         # LSTM Cell
-        encoder_single_cell_fw = tf.contrib.rnn.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) # BNLSTMCell(rnn_dim_hidden, is_training) 
-        decoder_single_cell_fw = tf.contrib.rnn.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) # BNLSTMCell(rnn_dim_hidden, is_training)
+        encoder_single_cell_fw = tf.contrib.rnn.GRUCell(rnn_dim_hidden)
+        decoder_single_cell_fw = tf.contrib.rnn.GRUCell(rnn_dim_hidden)
         
-        encoder_nodes_fw[node] = tf.nn.rnn_cell.MultiRNNCell([encoder_single_cell_fw] * rnn_num_layers)
-        decoder_nodes_fw[node] = tf.nn.rnn_cell.MultiRNNCell([decoder_single_cell_fw] * rnn_num_layers)
+        encoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([encoder_single_cell_fw] * rnn_num_layers)
+        decoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([decoder_single_cell_fw] * rnn_num_layers)
 
         states_fw[node] = encoder_nodes_fw[node].zero_state(batch_size, tf.float32)
-        
-        link[node].append(node)
-        output_fw[node] = []
+        output_fw[node] = [tf.constant(value=0, shape=(batch_size, rnn_dim_hidden), dtype=tf.float32)]
 
     # Build Graph
     flags = {value : False for value in node_type.values()}
     with tf.variable_scope("RNN", 
-                            regularizer=tf.contrib.layers.l2_regularizer(0.0005),
+                            regularizer=tf.contrib.layers.l2_regularizer(0.0001),
                             initializer=tf.contrib.layers.variance_scaling_initializer(factor=8, 
                                     mode='FAN_IN', uniform=False, seed=None, dtype=tf.float32)):
         flag=False
@@ -169,21 +164,13 @@ def GetLSTM(batch_size, input_size, is_training=True):
                 input_data = inputs[node][:, timestep, :]
                 embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)
                 weather_now = weather[:, timestep, :]
-                data = array_ops.concat(concat_dim=1, values=[input_data, embedding, weather_now])  
-                # concat all cells and hidden layers of relevant nodes
-                num_intop = len(link[node])
-                new_cell  = [[] for i in range(rnn_num_layers)]
-                new_hidden = [[] for i in range(rnn_num_layers)]
-                for i in range(num_intop):
-                    link_name = link[node][i]
-                    states = states_fw[link_name]
-                    for j in range(rnn_num_layers):
-                        new_cell[j].append(states[j].c)
-                        new_hidden[j].append(states[j].h)
-
-                for j in range(rnn_num_layers):
-                    new_cell[j] = array_ops.concat(concat_dim=1,values=new_cell[j])
-                    new_hidden[j] = array_ops.concat(concat_dim=1,values=new_hidden[j])
+                data = tf.concat(axis=1, values=[input_data, embedding, weather_now])  
+                
+                # concat output of relevant nodes
+                link_feature = []
+                for i in range(len(link[node])):
+                    link_feature.append(output_fw[link[node][i]][-1])
+                link_feature = tf.concat(axis=1, values=link_feature)      
 
                 with tf.variable_scope('node_type_{}'.format(node_type[node])) as scope:
                     if flags[node_type[node]] == True:
@@ -198,25 +185,24 @@ def GetLSTM(batch_size, input_size, is_training=True):
                                           is_training = is_training)
 
                 with  tf.variable_scope(node) as scope:
-                    in_dim = num_intop * rnn_dim_hidden
-                    states = []
-                    for i in range(rnn_num_layers):
-                        if ((timestep == 0) and (i == 0)) is False:
-                            scope.reuse_variables()
-                        tmp = RecursiveNetwork(cell = new_cell[i], 
-                                               hidden = new_hidden[i], 
-                                               in_dim = in_dim, 
-                                               out_dim = rnn_dim_hidden,
-                                               num_hidden = recursive_dim_hidden,
-                                               num_layer = recursive_num_layers,
-                                               is_training=is_training)
-                        states.append(tmp)
+                    if (timestep == 0) is False:
+                        scope.reuse_variables()
+                    
+                    link_feature = MultiLayerFC('Graph', 
+                                                    data=link_feature, 
+                                                    in_dim=link_feature.get_shape()[1], 
+                                                    out_dim=recursive_dim_output, 
+                                                    num_hidden=recursive_dim_hidden, 
+                                                    num_layer=recursive_num_layers, 
+                                                    activation='relu', is_training=is_training)
 
+                data = tf.concat(axis=1, values=[data, link_feature])
+                
                 # RNN
-                with tf.variable_scope('Encoder.LSTM', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
+                with tf.variable_scope('Encoder-GRU', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
                     if flag == True:
                         tf.get_variable_scope().reuse_variables()
-                    tmp, states_fw[node] = encoder_nodes_fw[node](data, states)
+                    tmp, states_fw[node] = encoder_nodes_fw[node](data, states_fw[node])
                     output_fw[node].append(tmp)
                 flag = True
 
@@ -228,40 +214,32 @@ def GetLSTM(batch_size, input_size, is_training=True):
                 input_data = output_fw[node][-1]
                 embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)                      
                 weather_now = weather[:, timestep, :]
-                data = array_ops.concat(concat_dim=1, values=[input_data, embedding, weather_now])
-                # concat in_link
-                num_intop = len(link[node])
-                new_cell  = [[] for i in range(rnn_num_layers)]
-                new_hidden = [[] for i in range(rnn_num_layers)]
-                for i in range(num_intop):
-                    link_name = link[node][i]
-                    states = states_fw[link_name]
-                    for j in range(rnn_num_layers):
-                        new_cell[j].append(states[j].c)
-                        new_hidden[j].append(states[j].h)
-
-                for j in range(rnn_num_layers):
-                    new_cell[j] = array_ops.concat(concat_dim=1, values=new_cell[j])
-                    new_hidden[j] = array_ops.concat(concat_dim=1, values=new_hidden[j])
+                data = tf.concat(axis=1, values=[input_data, embedding, weather_now])
+                
+                # concat output of relevant nodes
+                link_feature = []
+                for i in range(len(link[node])):
+                    link_feature.append(output_fw[link[node][i]][-1])
+                link_feature = tf.concat(axis=1, values=link_feature)      
 
                 with  tf.variable_scope(node) as scope:
-                    in_dim = num_intop * rnn_dim_hidden
                     scope.reuse_variables()
-                    states = []
-                    for i in range(rnn_num_layers):
-                        tmp = RecursiveNetwork(cell=new_cell[i], 
-                                               hidden=new_hidden[i], 
-                                               in_dim=in_dim, 
-                                               out_dim= rnn_dim_hidden,
-                                               num_hidden = recursive_dim_hidden,
-                                               num_layer = recursive_num_layers,
-                                               is_training=is_training)
-                        states.append(tmp)
+                    link_feature = MultiLayerFC('Graph', 
+                                                data=link_feature, 
+                                                in_dim=link_feature.get_shape()[1], 
+                                                out_dim=recursive_dim_output, 
+                                                num_hidden=recursive_dim_hidden, 
+                                                num_layer=recursive_num_layers, 
+                                                activation='relu', 
+                                                is_training=is_training)
 
-                with tf.variable_scope('Decoder.LSTM', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
+                data = tf.concat(axis=1, values=[data, link_feature])
+                
+                # RNN
+                with tf.variable_scope('Decoder-GRU', initializer=tf.orthogonal_initializer(gain=2.00)) as scope:
                     if flag == True:
                         tf.get_variable_scope().reuse_variables()
-                    tmp, states_fw[node] = decoder_nodes_fw[node](data, states)
+                    tmp, states_fw[node] = encoder_nodes_fw[node](data, states_fw[node])
                     output_fw[node].append(tmp)
                 flag = True
 
@@ -275,9 +253,14 @@ def GetLSTM(batch_size, input_size, is_training=True):
                     # concat hidden layers of all revelent link
                     num_path = len(route[node])
                     for path in route[node][i]:
-                        data.extend(output_fw[str(path)])
-                    data = array_ops.concat(concat_dim=1, values=data)
-                    data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = decoder_num_timesteps, name='{}_{}_{}'.format(node, target, 'fc1'))
+                        data.extend(output_fw[str(path)][1:])
+                    data = tf.concat(axis=1, values=data)
+
+                    data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = decoder_num_timesteps, name='{}_{}_{}'.format(node, target, 'fc1'), with_bn=True)
+                    data0 = data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = decoder_num_timesteps, name='{}_{}_{}'.format(node, target, 'fc2'), with_bn=False)
+                    data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = decoder_num_timesteps, name='{}_{}_{}'.format(node, target, 'fc3'), with_bn=False)
+                    data = data + data0
+                    
                     prediction['{}_{}'.format(node, target)] = data
         
         with tf.variable_scope("task2_net"):
@@ -286,12 +269,16 @@ def GetLSTM(batch_size, input_size, is_training=True):
                 num_output = task2_output[node]
                 # concat hidden layers of all revelent link
                 for key in link[node]:
-                    data.extend(output_fw[key])
+                    data.extend(output_fw[key][1:])
 
                 # prediction network
-                data = array_ops.concat(concat_dim=1, values=data)
-                data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim= decoder_num_timesteps*num_output, name='{}_{}'.format(node, 'fc1'))
-                data = array_ops.split(split_dim=1, num_split=num_output, value=data)
+                data = tf.concat(axis=1, values=data)
+                data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim= decoder_num_timesteps*num_output, name='{}_{}'.format(node, 'fc1'), with_bn=True)
+                data0 = data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim= decoder_num_timesteps*num_output, name='{}_{}'.format(node, 'fc2'), with_bn=False)
+                data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim= decoder_num_timesteps*num_output, name='{}_{}'.format(node, 'fc3'), with_bn=False)
+                data = data + data0
+                data = tf.split(axis=1, num_or_size_splits=num_output, value=data)
+                
                 for i in range(num_output):
                     prediction['{}_{}'.format(node, i)] = data[i]
         
@@ -300,8 +287,7 @@ def GetLSTM(batch_size, input_size, is_training=True):
             loss = []
             for key in labels:
                 cost = L1_loss(data=prediction[key], label=labels[key], scale=1.0, name=key)
-                tf.summary.scalar('Loss_{}'.format(key), cost)
                 loss.append(cost)
-            loss = tf.pack(loss)
+            loss = tf.stack(loss)
 
     return prediction, loss

@@ -14,15 +14,17 @@ import pandas as pd
 import os
 
 def pipeline(args):
-
     ### Experiment setting
-    exp_name = 'RNN_Exp1'
-    num_epoch = 1000
-    force_update = args.update_feature
+    exp_name = 'RNN-0'
+    num_epoch = 600
+    update_feature = args.update_feature
     resume_epoch = args.resume_epoch
     lr = args.lr
 
-    save_interval = 20
+    save_period = 200
+    log_period = 10
+    lr_scheduler_period = 50
+
     lr_decay = 0.90
     batchsize= 128
     num_tf_thread = 8
@@ -31,7 +33,7 @@ def pipeline(args):
 
     # Extracting basic features from rawdata
     volume_feature, trajectory_feature, weather_feature, link_feature = \
-            feature.PreprocessingRawdata(force_update=force_update)
+            feature.PreprocessingRawdata(update_feature=update_feature)
 
     # Combine all basic features
     data = feature.CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, link_feature)
@@ -48,101 +50,137 @@ def pipeline(args):
         feature.SplitData(data, label)
 
     # Get data iterator
-    loader = dataloader.DataLoader(data=data_train,
-                        label = label_train, 
-                        batchsize = batchsize,
-                        time= cfg.time.train_timeslots,
-                        is_train=True)
+    training_loader = dataloader.DataLoader(data=data_train,
+                                            label = label_train, 
+                                            batchsize = batchsize,
+                                            time= cfg.time.train_timeslots,
+                                            is_train=True)
+
+    validation_loader = dataloader.DataLoader(data = data_validation,
+                                              label = label_validation,
+                                              batchsize = batchsize,
+                                              time = cfg.time.validation_timeslots,
+                                              is_train=True)
+
+    testing_loader = dataloader.DataLoader(data = data_test,
+                                           label = label_test,
+                                           batchsize = 1,
+                                           time = cfg.time.test_timeslots,
+                                           is_train=False)
         
     ### step2 : training
 
-    # files 
-    exp_dir = os.path.join(cfg.data.checkpoint_dir, exp_name)
-    model_dir = exp_dir + "/model"
-    summary_dir = exp_dir + "/summary"
+    # files
+    exp_dir = os.path.join(exp_name)
+    if os.path.exists(exp_dir) is False:
+        os.makedirs(exp_dir)
 
-    if os.path.exists(model_dir) is False:
-        os.mkdir(model_dir)
-    if os.path.exists(summary_dir) is False:
-        os.mkdir(summary_dir)
+    # Get Graph
+    logging.info('Building Computational Graph...')
+    
+    shapes = {key:data[key].shape[1] for key in data}
+    prediction, loss = model.GetRNN(batchsize, shapes)
 
-    # Graph and params
-    if resume_epoch == -1:
-        # Get Computing Graph
-        logging.info('Building Computational Graph...')
-        shapes = {key:data[key].shape[1] for key in data}
-        prediction, loss = model.GetLSTM(batchsize, shapes)
+    # Optimizer
+    learning_rate = tf.placeholder(shape=[], dtype=tf.float32, name='learning_rate')
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+    
+    # create session ans saver
+    sess = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=num_tf_thread))
+    saver = tf.train.Saver()
+    
+    # Build the summary operation and summary writer
+    Training_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Training_MAPE')
+    Validation_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Validation_MAPE')
+    training_summary = tf.summary.scalar("Training_MAPE", Training_MAPE)
+    validation_summary = tf.summary.scalar("Validation_MAPE", Validation_MAPE)
+    learning_rate_summary = tf.summary.scalar("Learning_rate", learning_rate)
+    summary_writer = tf.summary.FileWriter(exp_dir, sess.graph)
 
-        # Build the summary operation based on the TF collection of Summaries.
-        summary_op = tf.summary.merge_all()
-
-        # Optimizer
-        learning_rate = tf.placeholder(shape=[], dtype=tf.float32, name='learning_rate')
-        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
-        
-        tf.add_to_collection('optimizer', optimizer)
-        tf.add_to_collection('loss', loss)
-        for key in prediction:
-            tf.add_to_collection(key, prediction[key])
-
-        # Create session
-        sess = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=num_tf_thread))
-        saver = tf.train.Saver()
+    # Model params
+    if resume_epoch == 0:
+        # initializing
         init = tf.global_variables_initializer()
         logging.info('Initializing params...')
         sess.run(init)
-        
-        # Save Graph and params
-        saver.save(sess, model_dir + '/model', global_step=0)
     else:
+        ## Loading
         logging.info('Loading the model of epoch[{}]...'.format(resume_epoch))
-        sess = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=num_tf_thread))
-        saver = tf.train.import_meta_graph(model_dir +'/model-{}.meta'.format(resume_epoch))
-        saver.restore(sess, model_dir + '/model-{}'.format(resume_epoch))
-        optimizer = tf.get_collection('optimizer')[0]
-        loss = tf.get_collection('loss')[0]
-
-    # Instantiate a SummaryWriter to output summaries and the Graph.
-    summary_writer = tf.summary.FileWriter(summary_dir, sess.graph)
+        saver.restore(sess, exp_dir + '/model-{}'.format(resume_epoch))
 
     #training
     logging.info("Starting training...")
-    for epoch in range(resume_epoch+1, num_epoch):
-        # reset loader and metric
-        loader.reset()
-        tic = time.time()
-        error_all = np.zeros((11))
-        count = 0.0
+    for epoch in range(resume_epoch+1, num_epoch+1):
+        # Reset loader and metric
+        training_loader.reset()
+        validation_loader.reset()
         
-        for batch in loader:
-            
+        error_training = np.zeros((11))
+        count_training = 0.0
+
+        error_validation = np.zeros((11))
+        count_validation = 0.0
+        
+        tic = time.time()
+        # Training
+        for batch in training_loader:
             # concat data and label
             data = batch.data
             data.update(batch.label)
             data['learning_rate:0'] = lr
-            
+            data['is_training:0'] = True
             # Feed data into graph
             _, error = sess.run([optimizer, loss], feed_dict=data)
             
             # Update metric
-            error_all = error_all + error
-            count += 1
-        
-        # Speend and Error 
-        error_all = error_all / count
-        toc = time.time()
-        logging.info("Epoch[{}] Speed:{:.2f} samples/sec Overal loss={:.5f}".format(epoch, loader.data_num/(toc-tic), error_all.mean()))
-        
-        # save 
-        if (epoch % save_interval == 0) and (epoch !=0) :
-            lr *= lr_decay
-            logging.info("Saving model of Epoch[{}]...".format(epoch))
-            saver.save(sess, model_dir + '/model', global_step=epoch)
+            error_training = error_training + error
+            count_training += 1
 
-    loging.info("Optimization Finished!")
+        toc = time.time()
+
+        # validation
+        for batch in validation_loader:
+            # concat data and label
+            data = batch.data
+            data.update(batch.label)
+            data['is_training:0'] = False
+            # Feed data into graph
+            error = sess.run(loss, feed_dict=data)
+            
+            # Update metric
+            error_validation = error_validation + error
+            count_validation += 1
+
+        # Speend and Error 
+        error_training = error_training / count_training
+        error_validation = error_validation / count_validation
+
+        logging.info("Epoch[{}] Speed:{:.2f} samples/sec Training MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch, 
+                    training_loader.data_num/(toc-tic), error_training.mean(), error_validation.mean()))
+        
+        # Summary
+        if (epoch % log_period == 0):
+            train_summ, validation_summ, lr_summ = sess.run([training_summary, 
+                                                             validation_summary, 
+                                                             learning_rate_summary],
+                                                    feed_dict={'Training_MAPE:0' : error_training.mean(), 
+                                                               'Validation_MAPE:0' : error_validation.mean(),
+                                                               'learning_rate:0' : lr})
+            summary_writer.add_summary(train_summ, epoch)
+            summary_writer.add_summary(validation_summ, epoch)
+            summary_writer.add_summary(lr_summ, epoch)
+
+        # Save checkpoint
+        if (epoch % save_period == 0):
+            logging.info("Saving model of Epoch[{}]...".format(epoch))
+            saver.save(sess, exp_dir + '/model', global_step=epoch)
+
+        # Learning rate schedule
+        if (epoch % lr_scheduler_period == 0):
+            lr *= lr_decay
+
+    logging.info("Optimization Finished!")
     sess.close()
-    
-    
 
 if __name__ == '__main__':
     # parse args

@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import RNNCell
+from tensorflow.contrib.rnn import RNNCell
 
 class BNLSTMCell(RNNCell):
     """
@@ -41,6 +41,7 @@ class BNLSTMCell(RNNCell):
                                                 epsilon=1E-3,
                                                 center=True,
                                                 scale=True,
+                                                fuse=True,
                                                 is_training=self.training,
                                                 scope='xh')
 
@@ -49,6 +50,7 @@ class BNLSTMCell(RNNCell):
                                                 epsilon=1E-3,
                                                 center=True,
                                                 scale=True,
+                                                fuse=True,
                                                 is_training=self.training,
                                                 scope='hh')
 
@@ -62,6 +64,7 @@ class BNLSTMCell(RNNCell):
                                                 epsilon=1E-3,
                                                 center=True,
                                                 scale=True,
+                                                fuse=True,
                                                 is_training=self.training,
                                                 scope='c')
 

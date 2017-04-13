@@ -112,7 +112,7 @@ def ExtractLinkRawdata(link, link_feature, time_interval=cfg.time.time_interval)
             link_feature[node][timeslot] = link.loc[node].drop(['in_top','out_top']).astype(float).to_dict()
 
 @jit
-def PreprocessingRawdata(force_update=False):
+def PreprocessingRawdata(update_feature=False):
 
     logging.info("Started to prepare data...")
 
@@ -126,7 +126,7 @@ def PreprocessingRawdata(force_update=False):
     if os.path.exists(volume_feature_file) and \
        os.path.exists(trajectory_feature_file) and \
        os.path.exists(weather_feature_file) and \
-       os.path.exists(link_feature_file) and force_update is False:
+       os.path.exists(link_feature_file) and update_feature is False:
         logging.info("Loading data from existing json files: volume_feature.json, "
                      "trajectory_feature.json, weather_feature.json...")
         volume_feature = ReadJson(volume_feature_file)
@@ -189,7 +189,7 @@ def CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, lin
     -------
     data : dict of Pandas.DataFrame
     """
-    logging.info("Combine all basic data")
+    logging.info("Combine all basic data...")
     data = trajectory_feature.copy()
     data['weather'] = weather_feature
 
