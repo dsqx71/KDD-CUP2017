@@ -71,7 +71,20 @@ cfg.time.all_timeslots.sort()
 assert len(np.unique(np.array(cfg.time.all_timeslots))) == len(cfg.time.all_timeslots), 'Time slots not unique'
 
 
+
 #### Model
+# loss scale
+cfg.model.loss_scale = []
+coeff = 1.0
+
+for time in cfg.time.train_timeslots:
+    tmp = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
+    coeff *= 1.00001
+    if (tmp.hour>=8 and tmp.hour<=10) or (tmp.hour>=17 and tmp.hour<=19):
+        cfg.model.loss_scale.append(2*coeff)
+    else:
+        cfg.model.loss_scale.append(1*coeff)
+cfg.model.loss_scale = np.array(cfg.model.loss_scale)
 
 # RNN topology
 cfg.model.link = {# links
@@ -155,14 +168,14 @@ cfg.model.task1_output = {'A': ['tollgate2', 'tollgate3'],
                           'C': ['tollgate1', 'tollgate3']}
 
 cfg.model.task2_output = {'tollgate1': 2,
-                'tollgate2': 1,
-                'tollgate3': 2}
+                          'tollgate2': 1,
+                          'tollgate3': 2}
 
 # route
-cfg.model.route = {'A': [[110, 123, 107, 108, 120, 117],
-                        [110, 123, 107, 108, 119, 114, 118, 122]],
-                   'B': [[105, 100, 111, 103, 116, 101, 121, 106, 113],
-                        [105, 100, 111, 103, 122]],
-                   'C': [[115, 102, 109, 104, 112, 111, 103, 116, 101, 121, 106, 113],
-                        [115, 102, 109, 104, 112, 111, 103, 122]]}
+cfg.model.route = {'A': [[110, 123, 107, 108, 120, 117, 'A','tollgate2'],
+                         [110, 123, 107, 108, 119, 114, 118, 122, 'A', 'tollgate3']],
+                   'B': [[105, 100, 111, 103, 116, 101, 121, 106, 113, 'B', 'tollgate1'],
+                        [105, 100, 111, 103, 122, 'B', 'tollgate3']],
+                   'C': [[115, 102, 109, 104, 112, 111, 103, 116, 101, 121, 106, 113, 'C', 'tollgate1'],
+                        [115, 102, 109, 104, 112, 111, 103, 122, 'C', 'tollgate3']]}
 

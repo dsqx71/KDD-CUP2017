@@ -14,6 +14,7 @@ import pandas as pd
 import os
 
 def pipeline(args):
+
     ### Experiment setting
     exp_name = 'RNN-0'
     num_epoch = 600
@@ -23,10 +24,10 @@ def pipeline(args):
 
     save_period = 200
     log_period = 10
-    lr_scheduler_period = 50
+    lr_scheduler_period = 10
 
-    lr_decay = 0.90
-    batchsize= 128
+    lr_decay = 0.85
+    batchsize= 256
     num_tf_thread = 8
 
     ### step1 : prepare data
@@ -39,11 +40,11 @@ def pipeline(args):
     data = feature.CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, link_feature)
     label = feature.GetLabels(data)
 
-    # Suduce mean and div std
-    data = feature.Standardize(data)
-
     # Filling missing values and convert data
     data = feature.FillingMissingData(data)
+
+    # Suduce mean and div std
+    data = feature.Standardize(data)
 
     # Split data into training data and testing data
     data_train, data_validation, data_test, label_train, label_validation, label_test = \
@@ -54,19 +55,19 @@ def pipeline(args):
                                             label = label_train, 
                                             batchsize = batchsize,
                                             time= cfg.time.train_timeslots,
-                                            is_train=True)
+                                            mode='train')
 
     validation_loader = dataloader.DataLoader(data = data_validation,
                                               label = label_validation,
-                                              batchsize = batchsize,
+                                              batchsize = 1,
                                               time = cfg.time.validation_timeslots,
-                                              is_train=True)
+                                              mode='validation')
 
     testing_loader = dataloader.DataLoader(data = data_test,
                                            label = label_test,
                                            batchsize = 1,
                                            time = cfg.time.test_timeslots,
-                                           is_train=False)
+                                           mode='test')
         
     ### step2 : training
 
@@ -79,7 +80,7 @@ def pipeline(args):
     logging.info('Building Computational Graph...')
     
     shapes = {key:data[key].shape[1] for key in data}
-    prediction, loss = model.GetRNN(batchsize, shapes)
+    prediction, loss, metric = model.GetRNN(shapes)
 
     # Optimizer
     learning_rate = tf.placeholder(shape=[], dtype=tf.float32, name='learning_rate')
@@ -87,15 +88,15 @@ def pipeline(args):
     
     # create session ans saver
     sess = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=num_tf_thread))
-    saver = tf.train.Saver()
+    # saver = tf.train.Saver()
     
     # Build the summary operation and summary writer
-    Training_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Training_MAPE')
-    Validation_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Validation_MAPE')
-    training_summary = tf.summary.scalar("Training_MAPE", Training_MAPE)
-    validation_summary = tf.summary.scalar("Validation_MAPE", Validation_MAPE)
-    learning_rate_summary = tf.summary.scalar("Learning_rate", learning_rate)
-    summary_writer = tf.summary.FileWriter(exp_dir, sess.graph)
+    # Training_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Training_MAPE')
+    # Validation_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Validation_MAPE')
+    # training_summary = tf.summary.scalar("Training_MAPE", Training_MAPE)
+    # validation_summary = tf.summary.scalar("Validation_MAPE", Validation_MAPE)
+    # learning_rate_summary = tf.summary.scalar("Learning_rate", learning_rate)
+    # summary_writer = tf.summary.FileWriter(exp_dir, sess.graph)
 
     # Model params
     if resume_epoch == 0:
@@ -115,10 +116,10 @@ def pipeline(args):
         training_loader.reset()
         validation_loader.reset()
         
-        error_training = np.zeros((11))
+        error_training = np.zeros((6))
         count_training = 0.0
 
-        error_validation = np.zeros((11))
+        error_validation = np.zeros((6))
         count_validation = 0.0
         
         tic = time.time()
@@ -128,9 +129,9 @@ def pipeline(args):
             data = batch.data
             data.update(batch.label)
             data['learning_rate:0'] = lr
-            data['is_training:0'] = True
+            data['is_training:0'] = True 
             # Feed data into graph
-            _, error = sess.run([optimizer, loss], feed_dict=data)
+            _, error = sess.run([optimizer, metric], feed_dict=data)
             
             # Update metric
             error_training = error_training + error
@@ -145,7 +146,7 @@ def pipeline(args):
             data.update(batch.label)
             data['is_training:0'] = False
             # Feed data into graph
-            error = sess.run(loss, feed_dict=data)
+            error = sess.run(metric, feed_dict=data)
             
             # Update metric
             error_validation = error_validation + error
@@ -159,21 +160,21 @@ def pipeline(args):
                     training_loader.data_num/(toc-tic), error_training.mean(), error_validation.mean()))
         
         # Summary
-        if (epoch % log_period == 0):
-            train_summ, validation_summ, lr_summ = sess.run([training_summary, 
-                                                             validation_summary, 
-                                                             learning_rate_summary],
-                                                    feed_dict={'Training_MAPE:0' : error_training.mean(), 
-                                                               'Validation_MAPE:0' : error_validation.mean(),
-                                                               'learning_rate:0' : lr})
-            summary_writer.add_summary(train_summ, epoch)
-            summary_writer.add_summary(validation_summ, epoch)
-            summary_writer.add_summary(lr_summ, epoch)
+        # if (epoch % log_period == 0):
+        #     train_summ, validation_summ, lr_summ = sess.run([training_summary, 
+        #                                                      validation_summary, 
+        #                                                      learning_rate_summary],
+        #                                             feed_dict={'Training_MAPE:0' : error_training.mean(), 
+        #                                                        'Validation_MAPE:0' : error_validation.mean(),
+        #                                                        'learning_rate:0' : lr})
+        #     summary_writer.add_summary(train_summ, epoch)
+        #     summary_writer.add_summary(validation_summ, epoch)
+        #     summary_writer.add_summary(lr_summ, epoch)
 
         # Save checkpoint
-        if (epoch % save_period == 0):
-            logging.info("Saving model of Epoch[{}]...".format(epoch))
-            saver.save(sess, exp_dir + '/model', global_step=epoch)
+        # if (epoch % save_period == 0):
+        #     logging.info("Saving model of Epoch[{}]...".format(epoch))
+        #     saver.save(sess, exp_dir + '/model', global_step=epoch)
 
         # Learning rate schedule
         if (epoch % lr_scheduler_period == 0):

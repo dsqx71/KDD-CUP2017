@@ -1,9 +1,10 @@
-from util import GetTimeslot
-from datetime import datetime, timedelta
-from numba import jit
 import os
 import logging
 import pandas as pd
+
+from util import GetTimeslot
+from datetime import datetime, timedelta
+from numba import jit
 from config import cfg
 from util import ReadJson, WriteJson, ReadRawdata
 
@@ -13,6 +14,7 @@ def ExtractTrajectoryRawdata(data, trajectory_feature, time_interval=cfg.time.ti
     logging.info("Extracting basic features from trajectroy rawdata...")
 
     for i in range(len(data)):
+        
         intersection = data.loc[i]['intersection_id']
         tollgate = "tollgate{}".format(data.loc[i]['tollgate_id'])
         starting_time = data.loc[i]['starting_time']
@@ -25,38 +27,56 @@ def ExtractTrajectoryRawdata(data, trajectory_feature, time_interval=cfg.time.ti
             trajectory_feature[intersection][time_slot].get('total_num', 0) + 1
         trajectory_feature[intersection][time_slot]['total_time'] = \
             trajectory_feature[intersection][time_slot].get('total_time', 0) + travel_time
+
+        trajectory_feature[intersection][time_slot]['avg_time'] = \
+            trajectory_feature[intersection][time_slot]['total_time'] / trajectory_feature[intersection][time_slot]['total_num']
         trajectory_feature[intersection][time_slot]['data_miss'] = 0
 
         trajectory_feature[intersection][time_slot]['num_{}'.format(tollgate)] = \
             trajectory_feature[intersection][time_slot].get('num_{}'.format(tollgate), 0) + 1
         trajectory_feature[intersection][time_slot]['time_{}'.format(tollgate)] = \
             trajectory_feature[intersection][time_slot].get('time_{}'.format(tollgate), 0) + travel_time
+        
+        trajectory_feature[intersection][time_slot]['avg_time_{}'.format(tollgate)] = \
+            trajectory_feature[intersection][time_slot]['time_{}'.format(tollgate)] / trajectory_feature[intersection][time_slot]['num_{}'.format(tollgate)]
+        
         trajectory_feature[intersection][time_slot]['datamiss_{}'.format(tollgate)] = 0
 
         # tollgate feature
-        for time in [(arrive_time,'arrive'), (starting_time, 'start')]:
+        # for time in [(arrive_time,'arrive'), (starting_time, 'start')]:
+        for time in [(starting_time, 'start')]:
             time_slot = GetTimeslot(time[0], interval=time_interval)
             trajectory_feature[tollgate][time_slot]['total_num_{}'.format(time[1])] = \
                 trajectory_feature[tollgate][time_slot].get('total_num_{}'.format(time[1]), 0) + 1
             trajectory_feature[tollgate][time_slot]['total_time_{}'.format(time[1])] = \
                 trajectory_feature[tollgate][time_slot].get('total_time_{}'.format(time[1]), 0) + travel_time
+
+            trajectory_feature[tollgate][time_slot]['avg_time_{}'.format(time[1])] = \
+                trajectory_feature[tollgate][time_slot]['total_time_{}'.format(time[1])] / trajectory_feature[tollgate][time_slot]['total_num_{}'.format(time[1])]
+
             trajectory_feature[tollgate][time_slot]['data_miss_{}'.format(time[1])] = 0
+
             trajectory_feature[tollgate][time_slot]['num_{}_{}'.format(intersection, time[1])] = \
                 trajectory_feature[tollgate][time_slot].get('num_{}_{}'.format(intersection, time[1]), 0) + 1
             trajectory_feature[tollgate][time_slot]['time_{}_{}'.format(intersection, time[1])] = \
                 trajectory_feature[tollgate][time_slot].get('time_{}_{}'.format(intersection, time[1]), 0) + travel_time
+
+            trajectory_feature[tollgate][time_slot]['avg_time_{}_{}'.format(intersection, time[1])] = \
+                trajectory_feature[tollgate][time_slot]['time_{}_{}'.format(intersection, time[1])] / trajectory_feature[tollgate][time_slot]['num_{}_{}'.format(intersection, time[1])]
 
         # link feature
         for j in data.loc[i]['travel_seq'].split(';'):
             link_name, enter_time, travel_time = j.split('#')
             travel_time = float(travel_time)
             enter_time = datetime.strptime(enter_time, "%Y-%m-%d %H:%M:%S")
-            for time in [(starting_time, 'start'), (enter_time, 'enter_time')]:
+            for time in [(starting_time, 'start'), (enter_time, 'enter_time'), (arrive_time, 'arrive_time')]:
                 time_slot = GetTimeslot(time[0], interval=time_interval)
                 trajectory_feature[link_name][time_slot]['num_{}'.format(time[1])]  = \
                     trajectory_feature[link_name][time_slot].get('num_{}'.format(time[1]), 0) + 1
                 trajectory_feature[link_name][time_slot]['time_{}'.format(time[1])] = \
                     trajectory_feature[link_name][time_slot].get('time_{}'.format(time[1]),0) + travel_time
+                trajectory_feature[link_name][time_slot]['avg_time_{}'.format(time[1])] = \
+                    trajectory_feature[link_name][time_slot]['time_{}'.format(time[1])] / trajectory_feature[link_name][time_slot]['num_{}'.format(time[1])]
                 trajectory_feature[link_name][time_slot]['data_miss_{}'.format(time[1])] = 0
 
 @jit
@@ -274,5 +294,7 @@ def Standardize(data):
     subduce mean and div std
     """
     for node in data:
-        data[node] = (data[node] - data[node].mean()) / data[node].std()
+        for key in data[node]:
+            if data[node][key].std() > 0:
+                data[node][key] = (data[node][key] - data[node][key].mean()) / data[node][key].std()
     return data
