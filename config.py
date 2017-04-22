@@ -30,12 +30,14 @@ cfg.time.volume_train_end   = datetime.strptime("2016-10-18 00:00:00", "%Y-%m-%d
 cfg.time.volume_totalmin = (cfg.time.volume_train_end - cfg.time.volume_train_start).total_seconds() / 60
 cfg.time.volume_slots = cfg.time.volume_totalmin / cfg.time.time_interval
 
+cfg.time.festival = ["2016-09-{}".format(item) for item in range(15, 18)] + ["2016-10-{}".format(item) for item in range(1, 8)]
 # testing timeslots
 cfg.time.test_timeslots = []
+
 for i in range(18, 25):
     for k in ['06', '15']:
         left = datetime.strptime("2016-10-{} {}:00:00".format(i, k), "%Y-%m-%d %H:%M:%S")
-        for j in range(int(2*60/cfg.time.time_interval)):
+        for j in range(int(4*60/cfg.time.time_interval)):
             cfg.time.test_timeslots.append(left.strftime("%Y-%m-%d %H:%M:%S"))
             left = left + timedelta(minutes=cfg.time.time_interval)
 
@@ -47,6 +49,7 @@ for slot in range(int(cfg.time.trajectory_slots)):
     right = left + timedelta(minutes=cfg.time.time_interval)
     cfg.time.train_timeslots.append(left.strftime("%Y-%m-%d %H:%M:%S"))
 
+# all_timeslots  = train timeslot + test timeslot
 cfg.time.all_timeslots = cfg.time.train_timeslots.copy()
 cfg.time.all_timeslots.extend(cfg.time.test_timeslots)
 
@@ -55,24 +58,19 @@ validation_start = len(cfg.time.train_timeslots) - int(cfg.data.validation_ratio
 cfg.time.validation_timeslots = cfg.time.train_timeslots[validation_start:]
 cfg.time.train_timeslots = cfg.time.train_timeslots[:validation_start]
 
-# padding timeslots
-for i in range(18, 25):
-    left = datetime.strptime("2016-10-{} 00:00:00".format(i, k), "%Y-%m-%d %H:%M:%S")
-    for j in range(int(24*60/cfg.time.time_interval)):
-        time = left.strftime("%Y-%m-%d %H:%M:%S")
-        left = left + timedelta(minutes=cfg.time.time_interval)
-        if time not in cfg.time.all_timeslots:
-            cfg.time.all_timeslots.append(time)
-
 cfg.time.validation_timeslots.sort()
 cfg.time.train_timeslots.sort()
 cfg.time.test_timeslots.sort()
 cfg.time.all_timeslots.sort()
+
+print ("num of 20-minute window in training set: {}".format(len(cfg.time.train_timeslots)))
+print ("num of 20-minute window in validation set: {}".format(len(cfg.time.validation_timeslots)))
+print ("num of 20-minute window in testing set: {}".format(len(cfg.time.test_timeslots)))
+
 assert len(np.unique(np.array(cfg.time.all_timeslots))) == len(cfg.time.all_timeslots), 'Time slots not unique'
 
-
-
 #### Model
+
 # loss scale
 cfg.model.loss_scale = []
 coeff = 1.0
@@ -120,6 +118,7 @@ cfg.model.link = {# links
             'tollgate1': ['113', 'A', 'B'],
             'tollgate2': ['117'],
             'tollgate3': ['122', 'A', 'B']}
+
 # Node Types
 # '0': normal link
 # '1': link, with in_top of NaN
@@ -172,10 +171,10 @@ cfg.model.task2_output = {'tollgate1': 2,
                           'tollgate3': 2}
 
 # route
-cfg.model.route = {'A': [[110, 123, 107, 108, 120, 117, 'A','tollgate2'],
-                         [110, 123, 107, 108, 119, 114, 118, 122, 'A', 'tollgate3']],
-                   'B': [[105, 100, 111, 103, 116, 101, 121, 106, 113, 'B', 'tollgate1'],
-                        [105, 100, 111, 103, 122, 'B', 'tollgate3']],
-                   'C': [[115, 102, 109, 104, 112, 111, 103, 116, 101, 121, 106, 113, 'C', 'tollgate1'],
-                        [115, 102, 109, 104, 112, 111, 103, 122, 'C', 'tollgate3']]}
+cfg.model.route = {'A': [['A', 110, 123, 107, 108, 120, 117,'tollgate2'],
+                         ['A', 110, 123, 107, 108, 119, 114, 118, 122, 'tollgate3']],
+                   'B': [['B', 105, 100, 111, 103, 116, 101, 121, 106, 113, 'tollgate1'],
+                         ['B', 105, 100, 111, 103, 122, 'tollgate3']],
+                   'C': [['C', 115, 102, 109, 104, 112, 111, 103, 116, 101, 121, 106, 113, 'tollgate1'],
+                         ['C', 115, 102, 109, 104, 112, 111, 103, 122, 'tollgate3']]}
 

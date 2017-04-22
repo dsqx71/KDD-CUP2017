@@ -7,7 +7,7 @@
 - ```config```: Model config and dataset description
 - ```data.checkpoint```: Tensorflow model files
 - ```data.dataSets```:  Rawdata, in csv format
-- ```data.features```:  Temporal data, in json format
+- ```data.features```:  Temporal data, in Pickle format
 - ```data.prediction```: Prediction results
 - ```dataloader```: Data iterator
 - ```feature```: Functions concern feature preprocessing

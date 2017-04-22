@@ -91,12 +91,12 @@ def pipeline(args):
     # saver = tf.train.Saver()
     
     # Build the summary operation and summary writer
-    # Training_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Training_MAPE')
-    # Validation_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Validation_MAPE')
-    # training_summary = tf.summary.scalar("Training_MAPE", Training_MAPE)
-    # validation_summary = tf.summary.scalar("Validation_MAPE", Validation_MAPE)
-    # learning_rate_summary = tf.summary.scalar("Learning_rate", learning_rate)
-    # summary_writer = tf.summary.FileWriter(exp_dir, sess.graph)
+    Training_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Training_MAPE')
+    Validation_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Validation_MAPE')
+    training_summary = tf.summary.scalar("Training_MAPE", Training_MAPE)
+    validation_summary = tf.summary.scalar("Validation_MAPE", Validation_MAPE)
+    learning_rate_summary = tf.summary.scalar("Learning_rate", learning_rate)
+    summary_writer = tf.summary.FileWriter(exp_dir, sess.graph)
 
     # Model params
     if resume_epoch == 0:
@@ -160,21 +160,21 @@ def pipeline(args):
                     training_loader.data_num/(toc-tic), error_training.mean(), error_validation.mean()))
         
         # Summary
-        # if (epoch % log_period == 0):
-        #     train_summ, validation_summ, lr_summ = sess.run([training_summary, 
-        #                                                      validation_summary, 
-        #                                                      learning_rate_summary],
-        #                                             feed_dict={'Training_MAPE:0' : error_training.mean(), 
-        #                                                        'Validation_MAPE:0' : error_validation.mean(),
-        #                                                        'learning_rate:0' : lr})
-        #     summary_writer.add_summary(train_summ, epoch)
-        #     summary_writer.add_summary(validation_summ, epoch)
-        #     summary_writer.add_summary(lr_summ, epoch)
+        if (epoch % log_period == 0):
+            train_summ, validation_summ, lr_summ = sess.run([training_summary, 
+                                                             validation_summary, 
+                                                             learning_rate_summary],
+                                                    feed_dict={'Training_MAPE:0' : error_training.mean(), 
+                                                               'Validation_MAPE:0' : error_validation.mean(),
+                                                               'learning_rate:0' : lr})
+            summary_writer.add_summary(train_summ, epoch)
+            summary_writer.add_summary(validation_summ, epoch)
+            summary_writer.add_summary(lr_summ, epoch)
 
         # Save checkpoint
-        # if (epoch % save_period == 0):
-        #     logging.info("Saving model of Epoch[{}]...".format(epoch))
-        #     saver.save(sess, exp_dir + '/model', global_step=epoch)
+        if (epoch % save_period == 0):
+            logging.info("Saving model of Epoch[{}]...".format(epoch))
+            saver.save(sess, exp_dir + '/model', global_step=epoch)
 
         # Learning rate schedule
         if (epoch % lr_scheduler_period == 0):

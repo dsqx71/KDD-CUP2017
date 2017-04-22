@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta
 from config import cfg
 
-def GetTimeslot(time, interval):
+def GetTimeslot(time, interval=cfg.time.time_interval):
     """
     Parameters
     ----------
@@ -14,7 +14,7 @@ def GetTimeslot(time, interval):
     Returns
     -------
     time_slot :  str,
-        denote which time slot the data belong to
+        denote which time window the data belong to
     """
     minute = math.floor(time.minute / interval) * interval
     new_time = datetime(time.year, time.month, time.day, time.hour, minute, 0)
@@ -64,3 +64,8 @@ def ReadRawdata():
     volume['time'] = volume['time'].map(lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S"))
 
     return trajectory, volume, weather, link, route
+
+
+def GetDataNum(num):
+
+    return num - 4 * 60 // cfg.time.time_interval + 1 
