@@ -24,85 +24,54 @@ def TrajectoryBaiscFeature(trajectory):
 
         trajectory_feature[time] = {}
         now = start_time
-
         for step in range(4*60//cfg.time.time_interval):
-            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = {}
+            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = {'A_tollgate2':[], 'A_tollgate3':[], 'B_tollgate1':[], 
+                                                                           'B_tollgate3':[], 'C_tollgate1':[], 'C_tollgate3':[],
+                                                                           'tollgate2_A':[], 'tollgate3_A':[], 'tollgate1_B':[], 
+                                                                           'tollgate3_B':[], 'tollgate1_C':[], 'tollgate3_C':[]}
+            for i in range(100, 124):
+                trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][str(i)] = []
             now = now + timedelta(minutes=cfg.time.time_interval)
 
         for i in range(len(data)):
-            
             # columns : "intersection_id","tollgate_id","vehicle_id","starting_time","travel_seq","travel_time"
-            intersection = data.iat[i, 0] + '_'
-            tollgate = "tollgate{}".format(data.iat[i, 1]) + '_'
+            intersection = data.iat[i, 0]
+            tollgate = "tollgate{}".format(data.iat[i, 1])
             starting_time = data.iat[i, 3]
             travel_time = float(data.iat[i, 5])
 
             # intersection feature and label
             time_slot = GetTimeslot(starting_time)
-            trajectory_feature[time][time_slot][intersection + 'total_num'] = \
-                trajectory_feature[time][time_slot].get(intersection + 'total_num', 0) + 1
-            trajectory_feature[time][time_slot][intersection + 'total_time'] = \
-                trajectory_feature[time][time_slot].get(intersection + 'total_time', 0) + travel_time
-
-            trajectory_feature[time][time_slot][intersection + 'avg_time'] = \
-                trajectory_feature[time][time_slot][intersection + 'total_time'] / trajectory_feature[time][time_slot][intersection + 'total_num']
-
-            trajectory_feature[time][time_slot][intersection + 'num_{}'.format(tollgate)] = \
-                trajectory_feature[time][time_slot].get(intersection + 'num_{}'.format(tollgate), 0) + 1
-            trajectory_feature[time][time_slot][intersection + 'time_{}'.format(tollgate)] = \
-                trajectory_feature[time][time_slot].get(intersection + 'time_{}'.format(tollgate), 0) + travel_time
-
-            trajectory_feature[time][time_slot][intersection + 'avg_time_{}'.format(tollgate)] = \
-                trajectory_feature[time][time_slot][intersection + 'time_{}'.format(tollgate)] / \
-                trajectory_feature[time][time_slot][intersection + 'num_{}'.format(tollgate)]
-
-            trajectory_feature[time][time_slot][intersection + 'datamiss_{}'.format(tollgate)] = 0
-
+            trajectory_feature[time][time_slot]['{}_{}'.format(intersection, tollgate)].append(travel_time)
+    
             if starting_time < start_time + timedelta(hours=2):
-
                 # tollgate feature
                 arrive_time = starting_time + timedelta(minutes=travel_time/60)
                 for item in [(arrive_time,'arrive')]:
                     if item[0] >= start_time and item[0] < end_time:
                         time_slot = GetTimeslot(item[0])
-                        trajectory_feature[time][time_slot][tollgate + 'total_num_{}'.format(item[1])] = \
-                            trajectory_feature[time][time_slot].get(tollgate + 'total_num_{}'.format(item[1]), 0) + 1
-                        trajectory_feature[time][time_slot][tollgate + 'total_time_{}'.format(item[1])] = \
-                            trajectory_feature[time][time_slot].get(tollgate+'total_time_{}'.format(item[1]), 0) + travel_time
-
-                        trajectory_feature[time][time_slot][tollgate + 'avg_time_{}'.format(item[1])] = \
-                            trajectory_feature[time][time_slot][tollgate + 'total_time_{}'.format(item[1])] / \
-                            trajectory_feature[time][time_slot][tollgate + 'total_num_{}'.format(item[1])]
-
-                        trajectory_feature[time][time_slot][tollgate + 'num_{}_{}'.format(intersection, item[1])] = \
-                            trajectory_feature[time][time_slot].get(tollgate + 'num_{}_{}'.format(intersection, item[1]), 0) + 1
-
-                        trajectory_feature[time][time_slot][tollgate + 'time_{}_{}'.format(intersection, item[1])] = \
-                            trajectory_feature[time][time_slot].get(tollgate + 'time_{}_{}'.format(intersection, item[1]), 0) + travel_time
-
-                        trajectory_feature[time][time_slot][tollgate + 'avg_time_{}_{}'.format(intersection, item[1])] = \
-                            trajectory_feature[time][time_slot][tollgate + 'time_{}_{}'.format(intersection, item[1])] / \
-                            trajectory_feature[time][time_slot][tollgate + 'num_{}_{}'.format(intersection, item[1])]
-
-                        trajectory_feature[time][time_slot][tollgate + 'data_miss_{}_{}'.format(item[1], intersection)] = 0
+                        trajectory_feature[time][time_slot]['{}_{}'.format(tollgate, intersection)].append(travel_time)
 
                 # link feature
                 for j in data.iat[i, 4].split(';'):
                     link_name, enter_time, travel_time = j.split('#')
-                    link_name = link_name + '_'
+                    link_name = link_name
                     travel_time = float(travel_time)
                     enter_time = datetime.strptime(enter_time, "%Y-%m-%d %H:%M:%S")
                     for item in [(enter_time, 'enter_time')]:
                         if  item[0]>=start_time and item[0]< end_time:
                             time_slot = GetTimeslot(item[0])
-                            trajectory_feature[time][time_slot][link_name+'num_{}'.format(item[1])]  = \
-                                trajectory_feature[time][time_slot].get(link_name+'num_{}'.format(item[1]), 0) + 1
-                            trajectory_feature[time][time_slot][link_name+'time_{}'.format(item[1])] = \
-                                trajectory_feature[time][time_slot].get(link_name+'time_{}'.format(item[1]),0) + travel_time
-                            trajectory_feature[time][time_slot][link_name + 'avg_time_{}'.format(item[1])] = \
-                                trajectory_feature[time][time_slot][link_name + 'time_{}'.format(item[1])] / \
-                                trajectory_feature[time][time_slot][link_name + 'num_{}'.format(item[1])]
-                            trajectory_feature[time][time_slot][link_name + 'data_miss_{}'.format(item[1])] = 0
+                            trajectory_feature[time][time_slot][link_name].append(travel_time)
+
+        now = start_time
+        for step in range(4*60//cfg.time.time_interval):
+            data = pd.Series([])
+            for key in trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")]:
+                tmp = pd.Series(trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][key]).describe()
+                tmp.index = ['{}_{}'.format(key, index) for index in tmp.index]
+                data = data.append(tmp)
+            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = data
+            now = now + timedelta(minutes=cfg.time.time_interval)
 
     # convert to Pandas DataFrame
     index_max = 0
@@ -207,7 +176,7 @@ def PreprocessingRawdata(update_feature=False):
         data = pd.read_pickle(data_file)
     else:
         trajectory, volume, weather, link, route = ReadRawdata()
-        
+
         trajectory_feature = TrajectoryBaiscFeature(trajectory)
         volume_feature = VolumeBasicFeature(volume)
         weather_feature = WeatherBasicFeature(weather)
@@ -222,109 +191,69 @@ def PreprocessingRawdata(update_feature=False):
                 
             data[time] = pd.concat([data[time], weather_feature.loc[timeslots], volume_feature.loc[timeslots]], axis=1).reset_index(drop=True)
 
+        data = pd.Panel(data)
         data.to_pickle(data_file)
 
-    return data
-
-@jit
-def CombineBasicFeature(volume_feature, trajectory_feature, weather_feature, link_feature):
-    """
-    Parameters
-    ----------
-    volume_feature : dict of dict
-    trajectory_feature : dict of dict
-    weather_feature : dict of dict
-    link_feature :  dict of dict
-
-    Returns
-    -------
-    data : dict of Pandas.DataFrame
-    """
-    logging.info("Combine all basic data...")
-    data = trajectory_feature.copy()
-    data['weather'] = weather_feature
-
-    for node in volume_feature:
-        for timeslot in volume_feature[node]:
-            for feature in volume_feature[node][timeslot]:
-                data[node][timeslot]['volume_{}'.format(feature)] = volume_feature[node][timeslot][feature]
-
-    for node in data:
-        data[node] = pd.DataFrame(data[node]).transpose()
-
-    for node in link_feature:
-        data[node] = pd.concat([data[node], pd.DataFrame(link_feature[node]).T], axis='columns')
-
-    return data
-
-def FillingMissingData(data):
-    """
-    Parameters
-    ----------
-    data :  dict of Pandas.DataFrame,
-
-    Returns
-    ----------
-    data : dict of numpy array
-    """
-    logging.info("Filling missing data...")
-    
-    for key in data:
-        data[key] = data[key].fillna(-1)
     return data
 
 def GetLabels(data):
     """
     Parameters
     ----------
-    data : dict of Pandas DataFrame
+    data : Pandas Panel
 
     Returns
     -------
-    labels : dict of Pandas Series
+    labels : Pandas Panel
     """
-    labels = {}
-
+    label = {}
     for intersection in cfg.model.task1_output:
         for tollgate in cfg.model.task1_output[intersection]:
-            labels['{}_{}'.format(intersection, tollgate)] = (data[intersection]['time_{}'.format(tollgate)] /
-                                                              data[intersection]['num_{}'.format(tollgate)])
+            label['{}_{}'.format(intersection, tollgate)]  = data.minor_xs('{}_{}_50%'.format(intersection, tollgate)).iloc[6:].T
 
     for tollgate in cfg.model.task2_output:
         for direction in range(cfg.model.task2_output[tollgate]):
-            labels['{}_{}'.format(tollgate, direction)] = data[tollgate]['volume_num_direction:{}'.format(direction)]
-    return labels
+            label['{}_{}'.format(tollgate, direction)] = data.minor_xs('{}_volumnnum_direction:{}'.format(tollgate, direction)).iloc[6:].T
+
+    label = pd.Panel(label)
+
+    return label
 
 def SplitData(data, label):
     """
     Split Data into training set, validation set, and testing set
     """
-    data_train = {}
-    data_validation = {}
-    data_test = {}
+    data_train = data[cfg.time.train_timeslots]
+    data_validation = data[cfg.time.validation_timeslots]
+    data_test = data[cfg.time.test_timeslots]
 
-    label_train = {}
-    label_validation = {}
-    label_test = {}
-
-    for node in data:
-        data_train[node] = data[node].loc[cfg.time.train_timeslots]
-        data_validation[node] = data[node].loc[cfg.time.validation_timeslots]
-        data_test[node] = data[node].loc[cfg.time.test_timeslots]
-
-    for node in label:
-        label_train[node] = label[node].loc[cfg.time.train_timeslots]
-        label_validation[node] = label[node].loc[cfg.time.validation_timeslots]
-        label_test[node] = label[node].loc[cfg.time.test_timeslots]
+    label_train = label[cfg.time.train_timeslots]
+    label_validation = label[cfg.time.validation_timeslots]
+    label_test = label[cfg.time.test_timeslots]
 
     return data_train, data_validation, data_test, label_train, label_validation, label_test
 
 def Standardize(data):
     """
     subduce mean and div std
+
+    Parameters
+    ----------
+    data : Pandas Panel
+
+    Returns
+    -------
+    data : Pandas Panel
     """
-    for node in data:
-        for key in data[node]:
-            if data[node][key].std() > 0:
-                data[node][key] = (data[node][key] - data[node][key].mean()) / data[node][key].std()
+    mean = data.mean(axis=0)
+    std = data.std(axis=0)
+
+    mask = (std == 0)
+    mean[mask] = 0
+    std[mask] = 1
+
+    data = data.subtract(mean, axis=0)
+    data = data.div(std, axis=0)
+
     return data
+    
