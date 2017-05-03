@@ -1,7 +1,56 @@
+import tensorflow as tf
 import math
 import numpy as np
-import tensorflow as tf
+
 from tensorflow.contrib.rnn import RNNCell
+
+def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=False):
+    """
+    Fully connect
+    """
+    W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim]) 
+    b = tf.get_variable(name=name+'_bias', shape=[out_dim], initializer=tf.zeros_initializer())
+
+    y = tf.matmul(x, W) + b
+
+    if with_bn:
+        y = tf.contrib.layers.batch_norm(y, 
+                                        decay=0.95,
+                                        epsilon=1E-5,
+                                        center=True, 
+                                        scale=True, 
+                                        fused=False,
+                                        is_training=is_training,
+                                        scope=name+'_bn')
+    if activation == 'relu':
+        y = tf.nn.relu(y, name=name + '_relu')
+    
+    elif activation == 'softmax':
+        y = tf.nn.softmax(y, name=name + '_softmax')
+    
+    elif activation == 'sigmoid':
+        y = tf.nn.sigmoid(y, name=name + '_sigmoid')
+
+    return y
+
+def MultiLayerFC(name, data, in_dim, out_dim, num_hidden, num_layer, activation='relu', is_training=True):
+    
+    if num_layer > 1:
+        data = FC(data, in_dim=in_dim, out_dim=num_hidden, name='{}_fc0'.format(name), 
+                activation=activation, is_training=is_training)
+        
+        for i in range(1, num_layer-1):
+             data= FC(data, in_dim = num_hidden, out_dim = num_hidden, name = '{}_fc{}'.format(name, i), 
+                activation=activation, is_training=is_training)
+        
+        data = FC(data, in_dim=num_hidden, out_dim=out_dim, name='{}_fc{}'.format(name, num_layer-1), 
+            activation=activation, is_training=is_training)
+    
+    elif num_layer == 1:   
+        data = FC(data, in_dim=in_dim, out_dim=out_dim, name='{}_fc0'.format(name), 
+            activation=activation, is_training=is_training)
+    
+    return data
 
 class BNLSTMCell(RNNCell):
     """

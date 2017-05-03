@@ -4,7 +4,6 @@ import pandas as pd
 
 from util import GetTimeslot
 from datetime import datetime, timedelta
-from numba import jit
 from config import cfg
 from util import ReadRawdata
 
@@ -86,7 +85,6 @@ def TrajectoryBaiscFeature(trajectory):
     
     return dataframe
 
-@jit
 def VolumeBasicFeature(data):
 
     logging.info("Extracting basic features from volume rawdata...")
@@ -120,7 +118,6 @@ def VolumeBasicFeature(data):
     dataframe = pd.DataFrame(volume_feature).T
     return dataframe
 
-@jit
 def WeatherBasicFeature(weather, time_interval=cfg.time.time_interval):
 
     logging.info("Extracting basic features from weather rawdata...")
@@ -141,11 +138,13 @@ def WeatherBasicFeature(weather, time_interval=cfg.time.time_interval):
     keys = weather_feature.keys()
     assert len(set(keys)) == len(keys)
 
-    dataframe = pd.DataFrame(weather_feature).T
 
+    dataframe = pd.DataFrame(weather_feature).T
+    weather_name = ["pressure","sea_pressure","wind_direction","wind_speed","temperature","rel_humidity","precipitation"]
+    mapper = {item: 'weather_' + item for item in weather_name}
+    dataframe.rename_axis(mapper=mapper, axis=1, inplace=True)
     return dataframe
 
-@jit
 def LinkBasicFeature(link):
 
     logging.info("Extracting basic features from link rawdata...")
@@ -162,7 +161,6 @@ def LinkBasicFeature(link):
 
     return link_feature
 
-@jit
 def PreprocessingRawdata(update_feature=False):
 
     logging.info("Started to prepare data...")
@@ -227,9 +225,9 @@ def SplitData(data, label):
     data_validation = data[cfg.time.validation_timeslots]
     data_test = data[cfg.time.test_timeslots]
 
-    label_train = label[cfg.time.train_timeslots]
-    label_validation = label[cfg.time.validation_timeslots]
-    label_test = label[cfg.time.test_timeslots]
+    label_train = label.loc[:, cfg.time.train_timeslots]
+    label_validation = label.loc[:, cfg.time.validation_timeslots]
+    label_test = label.loc[:, cfg.time.test_timeslots]
 
     return data_train, data_validation, data_test, label_train, label_validation, label_test
 

@@ -11,7 +11,7 @@ cfg.model = edict()
 cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/'
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
-
+cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
 cfg.data.validation_ratio = 0.10
 
 #### time
@@ -57,6 +57,7 @@ cfg.time.all_timeslots.extend(cfg.time.test_timeslots)
 validation_start = len(cfg.time.train_timeslots) - int(cfg.data.validation_ratio * len(cfg.time.train_timeslots))
 cfg.time.validation_timeslots = cfg.time.train_timeslots[validation_start:]
 cfg.time.train_timeslots = cfg.time.train_timeslots[:validation_start]
+# cfg.time.train_timeslots = cfg.time.train_timeslots[3000:]
 
 cfg.time.validation_timeslots.sort()
 cfg.time.train_timeslots.sort()
@@ -77,39 +78,40 @@ coeff = 1.0
 
 for time in cfg.time.train_timeslots:
     tmp = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
-    coeff *= 1.00001
+    coeff *= 1.000005
     if (tmp.hour>=8 and tmp.hour<=10) or (tmp.hour>=17 and tmp.hour<=19):
-        cfg.model.loss_scale.append(2*coeff)
+        cfg.model.loss_scale.append(1.5*coeff)
     else:
         cfg.model.loss_scale.append(1*coeff)
+cfg.model.loss_scale.extend([0] * 12)
 cfg.model.loss_scale = np.array(cfg.model.loss_scale)
 
 # RNN topology
 cfg.model.link = {# links
-            '100': ['105'],
-            '101': ['116'],
-            '102': ['115'],
-            '103': ['111'],
-            '104': ['109'],
-            '105': ['B'],
-            '106': ['121'],
-            '107': ['123'],
-            '108': ['107'],
-            '109': ['102'],
-            '110': ['A'],
-            '111': ['100', '112'],
-            '112': ['104'],
-            '113': ['106'],
-            '114': ['119'],
-            '115': ['C'],
-            '116': ['118','103'],
-            '117': ['120'],
-            '118': ['114'],
-            '119': ['108'],
-            '120': ['108'],
-            '121': ['101'],
-            '122': ['118','103'],
-            '123': ['110'],
+            '100': ['105','111'],
+            '101': ['116','121'],
+            '102': ['115','109'],
+            '103': ['111','122','116'],
+            '104': ['109','112'],
+            '105': ['B'  ,'100'],
+            '106': ['121','113'],
+            '107': ['123','108'],
+            '108': ['107','119','120'],
+            '109': ['102','104'],
+            '110': ['A', '123'],
+            '111': ['100', '112', '103'],
+            '112': ['104', '111'],
+            '113': ['106', 'tollgate1'],
+            '114': ['119', '118'],
+            '115': ['C', '102'],
+            '116': ['118','103','101'],
+            '117': ['120', 'tollgate2'],
+            '118': ['114', '116', '122'],
+            '119': ['108', '114'],
+            '120': ['108', '117'],
+            '121': ['101', '106'],
+            '122': ['118', '103', 'tollgate3'],
+            '123': ['110', '107'],
 
             # nodes
             'A': ['tollgate1', 'tollgate3', '110'],
