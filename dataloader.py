@@ -79,8 +79,7 @@ class DataLoader(object):
             return None
         label = {}
         for key in self.label:
-            if 'A' in key or 'B' in key or 'C' in key:
-                label[key+':0'] = self.label[key][list_index]
+            label[key+':0'] = self.label[key][list_index]
         return label
     
     def __next__(self):

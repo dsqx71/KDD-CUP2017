@@ -12,7 +12,7 @@ cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
-cfg.data.validation_ratio = 0.10
+cfg.data.validation_ratio = 0.05
 
 #### time
 cfg.time.time_interval = 20

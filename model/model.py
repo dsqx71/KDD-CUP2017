@@ -15,8 +15,8 @@ def Build(input_size):
     timestep_interval = cfg.time.time_interval
     output_interval = 20
 
-    rnn_num_layers = 4
-    rnn_dim_hidden = 8
+    rnn_num_layers = 2
+    rnn_dim_hidden = 16
 
     embedding_num = 72
     embedding_feature_num = 8
@@ -46,6 +46,15 @@ def Build(input_size):
         for item in task1_output[key]:
             label_name = '{}_{}'.format(key,item)
             print (label_name)
+            labels[label_name] = tf.placeholder(name=label_name, shape=(None, decoder_num_timesteps), dtype=tf.float32)
+            label_out.append(labels[label_name])
+
+    # task2 
+    keys = list(task2_output.keys())
+    keys.sort()
+    for key in keys:
+        for item in range(task2_output[key]):
+            label_name = '{}_{}'.format(key,item)
             labels[label_name] = tf.placeholder(name=label_name, shape=(None, decoder_num_timesteps), dtype=tf.float32)
             label_out.append(labels[label_name])
     label_out = tf.concat(label_out, axis=1)
@@ -163,7 +172,8 @@ def Build(input_size):
 
         ### Model Output
         prediction = {}
-        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l2_regularizer(0.7)):
+        task1_prediction = []
+        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l2_regularizer(0.6)):
             for node in task1_output:
                 for i in range(2):
                     target = task1_output[node][i]
@@ -176,7 +186,27 @@ def Build(input_size):
 
                     data = FC(x=input_data, in_dim=input_data.get_shape()[1].value, out_dim = decoder_num_timesteps, name='{}_{}_{}'.format(node, target, 'fc1'), with_bn=False)
                     prediction['{}_{}'.format(node, target)] = data
+                    task1_prediction.append(data)
+
+        with tf.variable_scope("task2_net", 
+                                initializer=tf.contrib.layers.variance_scaling_initializer(factor=0.1, 
+                                    mode='FAN_IN', uniform=False, seed=None, dtype=tf.float32),
+                                regularizer=tf.contrib.layers.l2_regularizer(0.1)):
+            for node in task2_output:
+                data  = []
+                num_output = task2_output[node]
+                # concat hidden layers of all revelent link
+                for key in link[node]:
+                    data.extend(output_fw[key][1+encoder_num_timesteps:])
+
+                # prediction network
+                data = tf.concat(axis=1, values=data)
+                data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim= decoder_num_timesteps*num_output, name='{}_{}'.format(node, 'fc1'), with_bn=False)
+                data = tf.split(axis=1, num_or_size_splits=num_output, value=data)
                 
+                for i in range(num_output):
+                    prediction['{}_{}'.format(node, i)] = data[i]
+
         ### Loss and Metric
         with tf.variable_scope('Loss_Metric'):
             
@@ -185,8 +215,11 @@ def Build(input_size):
             keys = list(labels.keys())
             keys.sort()
             for key in keys:
-                print (key)
-                loss = L1_loss(data=prediction[key], label=labels[key], scale=loss_scale)
+                if key.startswith('tollgate'):
+                    tmp = 5
+                else:
+                    tmp =  1
+                loss = L1_loss(data=prediction[key], label=labels[key], scale=loss_scale * tmp)
                 metric = L1_loss(data=prediction[key], label=labels[key], scale=1.0)    
                 
                 loss_list.append(loss)

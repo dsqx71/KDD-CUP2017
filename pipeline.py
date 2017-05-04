@@ -22,10 +22,10 @@ def pipeline(args):
     lr = args.lr
 
     exp_name = 'RNN'
-    num_epoch = 15
+    num_epoch = 50
     
     save_period = 200
-    log_period = 50
+    log_period = 30
     lr_scheduler_period = 5
 
     lr_decay = 0.5
@@ -117,11 +117,11 @@ def pipeline(args):
         training_loader.reset()
         validation_loader.reset()
         
-        error_training = np.zeros((36))
-        count_training = np.zeros((36))
+        error_training = np.zeros((66))
+        count_training = np.zeros((66))
 
-        error_validation = np.zeros((36))
-        count_validation = np.zeros((36))
+        error_validation = np.zeros((66))
+        count_validation = np.zeros((66))
         
         tic = time.time()
         # Training
@@ -155,12 +155,16 @@ def pipeline(args):
             count_validation += mask.sum(0)
 
         # Speend and Error
-        logging.info("Epoch[{}] Speed:{:.2f} samples/sec Training MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch, 
+        logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Travel Time] Training MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch, 
                     training_loader.data_num/(toc-tic), 
-                    error_training.sum() / count_training.sum(), 
-                    error_validation.sum() / count_validation.sum()))
-        print ('training', (error_training / count_training).reshape(6,6))
-        print ('validation', (error_validation / count_validation).reshape(6,6))
+                    error_training[:36].sum() / count_training[:36].sum(), 
+                    error_validation[:36].sum() / count_validation[:36].sum()))
+        logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Tollgate Volume] Training MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch, 
+                    training_loader.data_num/(toc-tic), 
+                    error_training[36:].sum() / count_training[36:].sum(), 
+                    error_validation[36:].sum() / count_validation[36:].sum()))
+        print ('training', (error_training / count_training).reshape(11,6))
+        print ('validation', (error_validation / count_validation).reshape(11,6))
         
         # Summary
         # if (epoch % log_period == 0):
@@ -185,35 +189,35 @@ def pipeline(args):
 
     logging.info("Optimization Finished!")
 
-    # Prediction
-    keys = list(prediction.keys())
-    keys.sort()
-    prediction = [prediction[key] for key in keys]
-    traveltime_result = []
-    for batch in testing_loader:
-        data = batch.data
-        data['is_training:0'] = False
-        aux = batch.aux
-        # Feed data into graph
-        pred = sess.run(prediction, feed_dict=data)
-        for index, key in enumerate(keys):
-            intersection, tollgate = key.split('_')
-            tollgate = tollgate[-1]
-            time_now = cfg.time.test_timeslots[aux+6:aux+12]
-            for i in range(6):
-                avg_time = pred[index][0][i]
-                left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
-                right = left + timedelta(minutes=cfg.time.time_interval)
+    # # Prediction
+    # keys = list(prediction.keys())
+    # keys.sort()
+    # prediction = [prediction[key] for key in keys]
+    # traveltime_result = []
+    # for batch in testing_loader:
+    #     data = batch.data
+    #     data['is_training:0'] = False
+    #     aux = batch.aux
+    #     # Feed data into graph
+    #     pred = sess.run(prediction, feed_dict=data)
+    #     for index, key in enumerate(keys):
+    #         intersection, tollgate = key.split('_')
+    #         tollgate = tollgate[-1]
+    #         time_now = cfg.time.test_timeslots[aux+6:aux+12]
+    #         for i in range(6):
+    #             avg_time = pred[index][0][i]
+    #             left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
+    #             right = left + timedelta(minutes=cfg.time.time_interval)
                 
-                item = dict(intersection_id=intersection,tollgate_id=tollgate, 
-                            time_window='[{},{})'.format(left, right), avg_travel_time=avg_time)
-                traveltime_result.append(item)
+    #             item = dict(intersection_id=intersection,tollgate_id=tollgate, 
+    #                         time_window='[{},{})'.format(left, right), avg_travel_time=avg_time)
+    #             traveltime_result.append(item)
     
-    # save prediction
-    traveltime_result = pd.DataFrame(traveltime_result, columns=['intersection_id','tollgate_id','time_window','avg_travel_time'] )
-    traveltime_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_travelTime.csv'.format(exp_name)), 
-                            sep=',', header=True,index=False)
-    logging.info('Prediction Finished!')
+    # # save prediction
+    # traveltime_result = pd.DataFrame(traveltime_result, columns=['intersection_id','tollgate_id','time_window','avg_travel_time'] )
+    # traveltime_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_travelTime.csv'.format(exp_name)), 
+    #                         sep=',', header=True,index=False)
+    # logging.info('Prediction Finished!')
     sess.close()
 
 if __name__ == '__main__':
