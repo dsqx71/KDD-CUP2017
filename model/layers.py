@@ -4,6 +4,18 @@ import numpy as np
 
 from tensorflow.contrib.rnn import RNNCell
 
+def Graph_Convolution(data, out_dim, name):
+    in_dim = data[0].get_shape()[1]
+    W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim])
+    result = []
+    for index, datum in enumerate(data):
+        if index == 0:
+            result = tf.matmul(datum, W)
+        else:
+            result = result + tf.matmul(datum, W)
+    result = result / len(data)
+    return result
+
 def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=False):
     """
     Fully connect
@@ -120,3 +132,4 @@ class BNLSTMCell(RNNCell):
             new_h = tf.tanh(bn_new_c) * tf.sigmoid(o)
 
             return new_h, tf.nn.rnn_cell.LSTMStateTuple(new_c, new_h)
+

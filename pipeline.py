@@ -22,11 +22,11 @@ def pipeline(args):
     lr = args.lr
 
     exp_name = 'RNN'
-    num_epoch = 50
+    num_epoch = 30
     
     save_period = 200
-    log_period = 30
-    lr_scheduler_period = 5
+    log_period = 50
+    lr_scheduler_period = 15
 
     lr_decay = 0.5
     batchsize= 256
@@ -81,9 +81,9 @@ def pipeline(args):
 
     # Optimizer
     learning_rate = tf.placeholder(shape=[], dtype=tf.float32, name='learning_rate')
-    # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
     # Clip gradient
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+    # optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
     # gvs = optimizer.compute_gradients(loss)
     # capped_gvs = [(tf.clip_by_value(grad, -clip_grad, clip_grad), var) for grad, var in gvs]
     # optimizer = optimizer.apply_gradients(capped_gvs)
