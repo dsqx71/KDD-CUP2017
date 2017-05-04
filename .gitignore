@@ -30,3 +30,7 @@
 ### Tensorflow files
 *_summary
 *_model
+*checkpoint*
+
+### Pickle
+*.pkl

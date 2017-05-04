@@ -11,7 +11,7 @@ cfg.model = edict()
 cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/'
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
-
+cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
 cfg.data.validation_ratio = 0.10
 
 #### time
@@ -30,12 +30,14 @@ cfg.time.volume_train_end   = datetime.strptime("2016-10-18 00:00:00", "%Y-%m-%d
 cfg.time.volume_totalmin = (cfg.time.volume_train_end - cfg.time.volume_train_start).total_seconds() / 60
 cfg.time.volume_slots = cfg.time.volume_totalmin / cfg.time.time_interval
 
+cfg.time.festival = ["2016-09-{}".format(item) for item in range(15, 18)] + ["2016-10-{}".format(item) for item in range(1, 8)]
 # testing timeslots
 cfg.time.test_timeslots = []
+
 for i in range(18, 25):
     for k in ['06', '15']:
         left = datetime.strptime("2016-10-{} {}:00:00".format(i, k), "%Y-%m-%d %H:%M:%S")
-        for j in range(int(2*60/cfg.time.time_interval)):
+        for j in range(int(4*60/cfg.time.time_interval)):
             cfg.time.test_timeslots.append(left.strftime("%Y-%m-%d %H:%M:%S"))
             left = left + timedelta(minutes=cfg.time.time_interval)
 
@@ -47,6 +49,7 @@ for slot in range(int(cfg.time.trajectory_slots)):
     right = left + timedelta(minutes=cfg.time.time_interval)
     cfg.time.train_timeslots.append(left.strftime("%Y-%m-%d %H:%M:%S"))
 
+# all_timeslots  = train timeslot + test timeslot
 cfg.time.all_timeslots = cfg.time.train_timeslots.copy()
 cfg.time.all_timeslots.extend(cfg.time.test_timeslots)
 
@@ -54,51 +57,61 @@ cfg.time.all_timeslots.extend(cfg.time.test_timeslots)
 validation_start = len(cfg.time.train_timeslots) - int(cfg.data.validation_ratio * len(cfg.time.train_timeslots))
 cfg.time.validation_timeslots = cfg.time.train_timeslots[validation_start:]
 cfg.time.train_timeslots = cfg.time.train_timeslots[:validation_start]
-
-# padding timeslots
-for i in range(18, 25):
-    left = datetime.strptime("2016-10-{} 00:00:00".format(i, k), "%Y-%m-%d %H:%M:%S")
-    for j in range(int(24*60/cfg.time.time_interval)):
-        time = left.strftime("%Y-%m-%d %H:%M:%S")
-        left = left + timedelta(minutes=cfg.time.time_interval)
-        if time not in cfg.time.all_timeslots:
-            cfg.time.all_timeslots.append(time)
+# cfg.time.train_timeslots = cfg.time.train_timeslots[3000:]
 
 cfg.time.validation_timeslots.sort()
 cfg.time.train_timeslots.sort()
 cfg.time.test_timeslots.sort()
 cfg.time.all_timeslots.sort()
-assert len(np.unique(np.array(cfg.time.all_timeslots))) == len(cfg.time.all_timeslots), 'Time slots not unique'
 
+print ("num of 20-minute window in training set: {}".format(len(cfg.time.train_timeslots)))
+print ("num of 20-minute window in validation set: {}".format(len(cfg.time.validation_timeslots)))
+print ("num of 20-minute window in testing set: {}".format(len(cfg.time.test_timeslots)))
+
+assert len(np.unique(np.array(cfg.time.all_timeslots))) == len(cfg.time.all_timeslots), 'Time slots not unique'
 
 #### Model
 
+# loss scale
+cfg.model.loss_scale = []
+coeff = 1.0
+
+for time in cfg.time.train_timeslots:
+    tmp = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
+    coeff *= 1.000005
+    if (tmp.hour>=8 and tmp.hour<=10) or (tmp.hour>=17 and tmp.hour<=19):
+        cfg.model.loss_scale.append(1.5*coeff)
+    else:
+        cfg.model.loss_scale.append(1*coeff)
+cfg.model.loss_scale.extend([0] * 12)
+cfg.model.loss_scale = np.array(cfg.model.loss_scale)
+
 # RNN topology
 cfg.model.link = {# links
-            '100': ['105'],
-            '101': ['116'],
-            '102': ['115'],
-            '103': ['111'],
-            '104': ['109'],
-            '105': ['B'],
-            '106': ['121'],
-            '107': ['123'],
-            '108': ['107'],
-            '109': ['102'],
-            '110': ['A'],
-            '111': ['100', '112'],
-            '112': ['104'],
-            '113': ['106'],
-            '114': ['119'],
-            '115': ['C'],
-            '116': ['118','103'],
-            '117': ['120'],
-            '118': ['114'],
-            '119': ['108'],
-            '120': ['108'],
-            '121': ['101'],
-            '122': ['118','103'],
-            '123': ['110'],
+            '100': ['105','111'],
+            '101': ['116','121'],
+            '102': ['115','109'],
+            '103': ['111','122','116'],
+            '104': ['109','112'],
+            '105': ['B'  ,'100'],
+            '106': ['121','113'],
+            '107': ['123','108'],
+            '108': ['107','119','120'],
+            '109': ['102','104'],
+            '110': ['A', '123'],
+            '111': ['100', '112', '103'],
+            '112': ['104', '111'],
+            '113': ['106', 'tollgate1'],
+            '114': ['119', '118'],
+            '115': ['C', '102'],
+            '116': ['118','103','101'],
+            '117': ['120', 'tollgate2'],
+            '118': ['114', '116', '122'],
+            '119': ['108', '114'],
+            '120': ['108', '117'],
+            '121': ['101', '106'],
+            '122': ['118', '103', 'tollgate3'],
+            '123': ['110', '107'],
 
             # nodes
             'A': ['tollgate1', 'tollgate3', '110'],
@@ -107,6 +120,7 @@ cfg.model.link = {# links
             'tollgate1': ['113', 'A', 'B'],
             'tollgate2': ['117'],
             'tollgate3': ['122', 'A', 'B']}
+
 # Node Types
 # '0': normal link
 # '1': link, with in_top of NaN
@@ -155,14 +169,14 @@ cfg.model.task1_output = {'A': ['tollgate2', 'tollgate3'],
                           'C': ['tollgate1', 'tollgate3']}
 
 cfg.model.task2_output = {'tollgate1': 2,
-                'tollgate2': 1,
-                'tollgate3': 2}
+                          'tollgate2': 1,
+                          'tollgate3': 2}
 
 # route
-cfg.model.route = {'A': [[110, 123, 107, 108, 120, 117],
-                        [110, 123, 107, 108, 119, 114, 118, 122]],
-                   'B': [[105, 100, 111, 103, 116, 101, 121, 106, 113],
-                        [105, 100, 111, 103, 122]],
-                   'C': [[115, 102, 109, 104, 112, 111, 103, 116, 101, 121, 106, 113],
-                        [115, 102, 109, 104, 112, 111, 103, 122]]}
+cfg.model.route = {'A': [['A', 110, 123, 107, 108, 120, 117,'tollgate2'],
+                         ['A', 110, 123, 107, 108, 119, 114, 118, 122, 'tollgate3']],
+                   'B': [['B', 105, 100, 111, 103, 116, 101, 121, 106, 113, 'tollgate1'],
+                         ['B', 105, 100, 111, 103, 122, 'tollgate3']],
+                   'C': [['C', 115, 102, 109, 104, 112, 111, 103, 116, 101, 121, 106, 113, 'tollgate1'],
+                         ['C', 115, 102, 109, 104, 112, 111, 103, 122, 'tollgate3']]}
 
