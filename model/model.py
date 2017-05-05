@@ -15,13 +15,13 @@ def Build(input_size):
     timestep_interval = cfg.time.time_interval
     output_interval = 20
 
-    rnn_num_layers = 3
-    rnn_dim_hidden = 8
+    rnn_num_layers = 2
+    rnn_dim_hidden = 6
 
-    graph_dim_hidden = 8
+    graph_dim_hidden = 6
 
     embedding_num = 72
-    embedding_feature_num = 8
+    embedding_feature_num = 2
 
     encoder_num_timesteps = 120 // timestep_interval
     decoder_num_timesteps = 120 // output_interval
@@ -68,7 +68,7 @@ def Build(input_size):
         inputs[node] = tf.placeholder(tf.float32, shape=(None, encoder_num_timesteps, input_size[node]), name = node)
         inputs[node] = tf.cond(is_training, 
                            lambda : inputs[node] + \
-                           tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.09) * inputs[node] + \
+                           tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.05) * inputs[node] + \
                            tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.03),
                            lambda : inputs[node])
         
@@ -84,7 +84,7 @@ def Build(input_size):
         output_fw[node] = [tf.fill(shape, 0.0)]
 
     # Build Graph
-    with tf.variable_scope("Embedding", regularizer=tf.contrib.layers.l2_regularizer(0.05)):
+    with tf.variable_scope("Embedding", regularizer=tf.contrib.layers.l2_regularizer(0.3)):
         # Embedding of node
         for node in link:
             embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -0.5, 0.5), 
@@ -169,38 +169,49 @@ def Build(input_size):
 
         ### Model Output
         prediction = {}
-        task1_prediction = []
-        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l2_regularizer(0.05)):
+        task1_prediction = {}
+        task2_prediction = {}
+        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l2_regularizer(0.01)):
             for node in task1_output:
                 for i in range(2):
                     target = task1_output[node][i]
-                    data = []
-                    # concat hidden layers of all revelent link
-                    num_path = len(route[node])
-                    for path in route[node][i]:
-                        data.extend(output_fw[str(path)][1:])
-                    input_data = tf.concat(axis=1, values=data)
-
-                    data = FC(x=input_data, in_dim=input_data.get_shape()[1].value, out_dim = decoder_num_timesteps, name='{}_{}_{}'.format(node, target, 'fc1'), with_bn=False)
+                    pred_result = []
+                    with tf.variable_scope("{}_{}".format(node, target)):
+                        for time in range(decoder_num_timesteps):
+                            data = []
+                            # concat hidden layers of all revelent link
+                            for path in route[node][i]:
+                                data.append(output_fw[str(path)][1+encoder_num_timesteps+time])
+                            data = tf.concat(axis=1, values=data)
+                            if time > 0:
+                                tf.get_variable_scope().reuse_variables()
+                            data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = 1, name='{}_{}_{}'.format(node, target, 'fc1'), with_bn=False)
+                            pred_result.append(data)  
+                    data = tf.concat(pred_result, axis=1)
                     prediction['{}_{}'.format(node, target)] = data
-                    task1_prediction.append(data)
+                    task1_prediction['{}_{}'.format(node, target)] = data
 
         with tf.variable_scope("task2_net", 
                                 initializer=tf.contrib.layers.variance_scaling_initializer(factor=2, 
                                     mode='FAN_IN', uniform=False, seed=None, dtype=tf.float32),
-                                regularizer=tf.contrib.layers.l2_regularizer(0.05)):
-            data = []
-            for node in link:
-                data.extend(output_fw[node][1:])
-            data = tf.concat(data, axis=1)
-            data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = decoder_num_timesteps * 5, name='fc', with_bn=False)
-            data = tf.split(value=data, num_or_size_splits = 5, axis=1)
-            index = 0
+                                regularizer=tf.contrib.layers.l2_regularizer(0.01)):
+            
             for key in task2_output:
                 num_output = task2_output[key]
                 for item in range(num_output):
-                    prediction['{}_{}'.format(key, item)] = data[index]
-                    index += 1
+
+                    with tf.variable_scope('{}_{}'.format(key, item)):
+                        pred_result = []
+                        for time in range(decoder_num_timesteps):
+                            data = output_fw[key][1+encoder_num_timesteps+time]
+                            if time > 0:
+                                tf.get_variable_scope().reuse_variables()
+                            data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = 1, name='{}_{}_{}'.format(key, item, 'fc1'), with_bn=False)
+                            pred_result.append(data)
+                        data = tf.concat(pred_result, axis=1)
+
+                    prediction['{}_{}'.format(key, item)] = data
+                    task2_prediction['{}_{}'.format(key, item)] = data
 
         ### Loss and Metric
         with tf.variable_scope('Loss_Metric'):
@@ -222,4 +233,5 @@ def Build(input_size):
             
             loss = tf.concat(loss_list, axis=1)
             metric = tf.concat(metric_list, axis=1)
-    return prediction, loss, metric, label_out
+
+    return task1_prediction, task2_prediction, loss, metric, label_out

@@ -40,15 +40,18 @@ class DataLoader(object):
         print (self.time)
         self.original_time = np.array(time)
         # num of data depend on mode
-        if mode == 'validation' or mode == 'test':
+        if  mode == 'test':
             self.list_index = [item for item in range(self.data_num) \
                                if self.time[item] == (6*60//cfg.time.time_interval) or self.time[item] == (15*60//cfg.time.time_interval)]
-            self.data_num = len(self.list_index)
+        elif  mode == 'validation':
+            self.list_index = [item for item in range(self.data_num) \
+                               if (self.time[item] >= (5*60//cfg.time.time_interval) and self.time[item] <= (7*60//cfg.time.time_interval)) or  
+                                  (self.time[item] >= (14*60//cfg.time.time_interval) and self.time[item] <= (16*60//cfg.time.time_interval))]
         elif mode == 'train':
             self.list_index = [item for item in range(self.data_num)]
         else:
             raise ValueError("The mode doesn't exist")        
-        
+        self.data_num = len(self.list_index)
         if mode == 'train':
             self.loss_scale = np.array(cfg.model.loss_scale)
         print (self.data_num)
@@ -79,6 +82,7 @@ class DataLoader(object):
             return None
         label = {}
         for key in self.label:
+            # if 'A' in key or 'B' in key or 'C' in key:
             label[key+':0'] = self.label[key][list_index]
         return label
     

@@ -6,14 +6,16 @@ from tensorflow.contrib.rnn import RNNCell
 
 def Graph_Convolution(data, out_dim, name):
     in_dim = data[0].get_shape()[1]
-    W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim])
     result = []
     for index, datum in enumerate(data):
+        W = tf.get_variable(name=name+'_weight{}'.format(index), shape=[in_dim, out_dim])
+        tmp = tf.matmul(datum, W)
         if index == 0:
-            result = tf.matmul(datum, W)
+            result = tmp
         else:
-            result = result + tf.matmul(datum, W)
+            result = result + tmp
     result = result / len(data)
+    result = tf.nn.relu(result)
     return result
 
 def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=False):
@@ -61,6 +63,16 @@ def MultiLayerFC(name, data, in_dim, out_dim, num_hidden, num_layer, activation=
     elif num_layer == 1:   
         data = FC(data, in_dim=in_dim, out_dim=out_dim, name='{}_fc0'.format(name), 
             activation=activation, is_training=is_training)
+    
+    return data
+
+def shortcut(data, out_dim, name, dropout_prob=None):
+    
+    if dropout_prob is not None:  
+        data = tf.nn.dropout(data, keep_prob=1 - dropout_prob)
+    data0 = data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = out_dim, name=name + 'fc1')
+    data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = out_dim, name=name + 'fc2')
+    data = data + data0
     
     return data
 
@@ -132,4 +144,3 @@ class BNLSTMCell(RNNCell):
             new_h = tf.tanh(bn_new_c) * tf.sigmoid(o)
 
             return new_h, tf.nn.rnn_cell.LSTMStateTuple(new_c, new_h)
-

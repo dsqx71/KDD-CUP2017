@@ -26,12 +26,12 @@ def pipeline(args):
     
     save_period = 200
     log_period = 50
-    lr_scheduler_period = 15
+    lr_scheduler_period = 10
 
     lr_decay = 0.5
-    batchsize= 256
+    batchsize= 128
     num_tf_thread = 8
-    clip_grad = 5.0
+    clip_grad = 1.0
 
     ### step1 : prepare data
     data = feature.PreprocessingRawdata(update_feature=update_feature)
@@ -77,16 +77,17 @@ def pipeline(args):
     for key in input_nodes:
         shapes[key] = len([item for item in feature_name if item.startswith(key)])
     # Build Graph
-    prediction, loss, metric, label_sym = model.Build(shapes)
+    task1_prediction, task2_prediction, loss, metric, label_sym = model.Build(shapes)
 
     # Optimizer
     learning_rate = tf.placeholder(shape=[], dtype=tf.float32, name='learning_rate')
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
+    # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
     # Clip gradient
     # optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
-    # gvs = optimizer.compute_gradients(loss)
-    # capped_gvs = [(tf.clip_by_value(grad, -clip_grad, clip_grad), var) for grad, var in gvs]
-    # optimizer = optimizer.apply_gradients(capped_gvs)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    gvs = optimizer.compute_gradients(loss)
+    capped_gvs = [(tf.clip_by_value(grad, -clip_grad, clip_grad), var) for grad, var in gvs]
+    optimizer = optimizer.apply_gradients(capped_gvs)
     # create session ans saver
     sess = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=num_tf_thread))
     # saver = tf.train.Saver()
@@ -189,35 +190,60 @@ def pipeline(args):
 
     logging.info("Optimization Finished!")
 
-    # # Prediction
-    # keys = list(prediction.keys())
-    # keys.sort()
-    # prediction = [prediction[key] for key in keys]
-    # traveltime_result = []
-    # for batch in testing_loader:
-    #     data = batch.data
-    #     data['is_training:0'] = False
-    #     aux = batch.aux
-    #     # Feed data into graph
-    #     pred = sess.run(prediction, feed_dict=data)
-    #     for index, key in enumerate(keys):
-    #         intersection, tollgate = key.split('_')
-    #         tollgate = tollgate[-1]
-    #         time_now = cfg.time.test_timeslots[aux+6:aux+12]
-    #         for i in range(6):
-    #             avg_time = pred[index][0][i]
-    #             left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
-    #             right = left + timedelta(minutes=cfg.time.time_interval)
+    # Prediction
+    task1_keys = list(task1_prediction.keys())
+    task1_keys.sort()
+    task1_prediction = [task1_prediction[key] for key in task1_keys]
+
+    task2_keys = list(task2_prediction.keys())
+    task2_keys.sort()
+    task2_prediction = [task2_prediction[key] for key in task2_keys]
+
+    traveltime_result = []
+    volume_result = []
+    for batch in testing_loader:
+        data = batch.data
+        data['is_training:0'] = False
+        aux = batch.aux
+        # Feed data into graph
+        pred = sess.run(task1_prediction, feed_dict=data)
+        for index, key in enumerate(task1_keys):
+            intersection, tollgate = key.split('_')
+            tollgate = tollgate[-1]
+            time_now = cfg.time.test_timeslots[aux+6:aux+12]
+            for i in range(6):
+                avg_time = pred[index][0][i]
+                left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
+                right = left + timedelta(minutes=cfg.time.time_interval)
                 
-    #             item = dict(intersection_id=intersection,tollgate_id=tollgate, 
-    #                         time_window='[{},{})'.format(left, right), avg_travel_time=avg_time)
-    #             traveltime_result.append(item)
-    
-    # # save prediction
-    # traveltime_result = pd.DataFrame(traveltime_result, columns=['intersection_id','tollgate_id','time_window','avg_travel_time'] )
-    # traveltime_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_travelTime.csv'.format(exp_name)), 
+                item = dict(intersection_id=intersection,tollgate_id=tollgate, 
+                            time_window='[{},{})'.format(left, right), avg_travel_time=avg_time)
+                traveltime_result.append(item)
+        
+        # pred = sess.run(task2_prediction, feed_dict=data)
+        # for index, key in enumerate(task2_keys):
+        #     tollgate, direction = key.split('_')
+        #     tollgate = tollgate[-1]
+        #     time_now = cfg.time.test_timeslots[aux+6:aux+12]
+        #     for i in range(6):
+        #         volume = pred[index][0][i]
+        #         left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
+        #         right = left + timedelta(minutes=cfg.time.time_interval)
+                
+        #         item = dict(tollgate_id=tollgate, 
+        #                     time_window='[{},{})'.format(left, right), 
+        #                     direction=direction,
+        #                     volume=volume)
+        #         volume_result.append(item)
+
+    # save prediction
+    traveltime_result = pd.DataFrame(traveltime_result, columns=['intersection_id','tollgate_id','time_window','avg_travel_time'] )
+    traveltime_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_travelTime.csv'.format(exp_name)), 
+                            sep=',', header=True,index=False)
+    # volume_result = pd.DataFrame(volume_result, columns=['tollgate_id','time_window','direction','volume'])
+    # volume_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_volume.csv'.format(exp_name)), 
     #                         sep=',', header=True,index=False)
-    # logging.info('Prediction Finished!')
+    logging.info('Prediction Finished!')
     sess.close()
 
 if __name__ == '__main__':
