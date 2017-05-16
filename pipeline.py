@@ -21,9 +21,9 @@ def pipeline(args):
     resume_epoch = args.resume_epoch
     lr = args.lr
 
-    exp_name = 'RNN-3'
-    num_epoch = 20
-    
+    exp_name = 'RNN'
+    num_epoch = 30
+
     save_period = 200
     log_period = 50
     lr_scheduler_period = 80
@@ -31,7 +31,7 @@ def pipeline(args):
     lr_decay = 0.5
     batchsize= 256
     num_tf_thread = 8
-    clip_grad = 0.01
+    clip_grad = 0.1
 
     ### step1 : prepare data
     data = feature.PreprocessingRawdata(update_feature=update_feature)
@@ -43,7 +43,7 @@ def pipeline(args):
 
     # Get data iterator
     training_loader = dataloader.DataLoader(data=data_train,
-                                            label = label_train, 
+                                            label = label_train,
                                             batchsize = batchsize,
                                             time= cfg.time.train_timeslots,
                                             mode='train',
@@ -60,7 +60,7 @@ def pipeline(args):
                                            batchsize = 1,
                                            time = cfg.time.test_timeslots,
                                            mode='test')
-        
+
     ### step2 : training
 
     # files
@@ -70,11 +70,11 @@ def pipeline(args):
 
     # Get Graph
     logging.info('Building Computational Graph...')
-    
+
     # Get input shapes
     feature_name = data.minor_axis
     shapes= {}
-    input_nodes = list(cfg.model.link.keys()) + ['weather'] 
+    input_nodes = list(cfg.model.link.keys()) + ['weather']
     for key in input_nodes:
         shapes[key] = len([item for item in feature_name if item.startswith(key)])
     # Build Graph
@@ -85,6 +85,7 @@ def pipeline(args):
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
     # Clip gradient
     # optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+    # TODO: add momentum and other params
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     gvs = optimizer.compute_gradients(loss)
     capped_gvs = [(tf.clip_by_value(grad, -clip_grad, clip_grad), var) for grad, var in gvs]
@@ -94,7 +95,7 @@ def pipeline(args):
     # create session ans saver
     sess = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=num_tf_thread))
     # saver = tf.train.Saver()
-    
+
     # Build the summary operation and summary writer
     # Training_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Training_MAPE')
     # Validation_MAPE = tf.placeholder(shape=[], dtype=tf.float32, name='Validation_MAPE')
@@ -120,7 +121,7 @@ def pipeline(args):
         # Reset loader and metric
         training_loader.reset()
         validation_loader.reset()
-        
+
         error_training_time = np.zeros((66))
         count_training_time = np.zeros((66))
 
@@ -148,7 +149,7 @@ def pipeline(args):
             # Update metric
             error_training = error_training + error.sum(0)
             count_training += mask.sum(0)
-            
+
             mask2 = (data['time:0'] ==18) | (data['time:0'] == 45)
             error_training_time = error_training_time + error[mask2].sum(0)
             count_training_time += mask[mask2].sum(0)
@@ -169,25 +170,25 @@ def pipeline(args):
             count_validation += mask.sum(0)
 
         # Speend and Error
-        logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Travel Time] Training_all MAPE={:.5f} Training_time MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch, 
-                    training_loader.data_num/(toc-tic), 
+        logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Travel Time] Training_all MAPE={:.5f} Training_time MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch,
+                    training_loader.data_num/(toc-tic),
                     error_training[:36].sum() / count_training[:36].sum(),
                     error_training_time[:36].sum() / count_training_time[:36].sum(),
                     error_validation[:36].sum() / count_validation[:36].sum()))
-        logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Tollgate Volume] Training MAPE={:.5f} Training_time MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch, 
-                    training_loader.data_num/(toc-tic), 
-                    error_training[36:].sum() / count_training[36:].sum(), 
+        logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Tollgate Volume] Training MAPE={:.5f} Training_time MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch,
+                    training_loader.data_num/(toc-tic),
+                    error_training[36:].sum() / count_training[36:].sum(),
                     error_training_time[36:].sum() / count_training_time[36:].sum(),
                     error_validation[36:].sum() / count_validation[36:].sum()))
         print ('training', (error_training / count_training).reshape(11,6))
         print ('validation', (error_validation / count_validation).reshape(11,6))
-        
+
         # Summary
         # if (epoch % log_period == 0):
-        #     train_summ, validation_summ, lr_summ = sess.run([training_summary, 
-        #                                                      validation_summary, 
+        #     train_summ, validation_summ, lr_summ = sess.run([training_summary,
+        #                                                      validation_summary,
         #                                                      learning_rate_summary],
-        #                                             feed_dict={'Training_MAPE:0' : error_training.mean(), 
+        #                                             feed_dict={'Training_MAPE:0' : error_training.mean(),
         #                                                        'Validation_MAPE:0' : error_validation.mean(),
         #                                                        'learning_rate:0' : lr})
         #     summary_writer.add_summary(train_summ, epoch)
@@ -230,11 +231,11 @@ def pipeline(args):
                 avg_time = pred[index][0][i]
                 left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
                 right = left + timedelta(minutes=cfg.time.time_interval)
-                
-                item = dict(intersection_id=intersection,tollgate_id=tollgate, 
+
+                item = dict(intersection_id=intersection,tollgate_id=tollgate,
                             time_window='[{},{})'.format(left, right), avg_travel_time=avg_time)
                 traveltime_result.append(item)
-        
+
         pred = sess.run(task2_prediction, feed_dict=data)
         for index, key in enumerate(task2_keys):
             tollgate, direction = key.split('_')
@@ -244,19 +245,19 @@ def pipeline(args):
                 volume = pred[index][0][i]
                 left = datetime.strptime(time_now[i], "%Y-%m-%d %H:%M:%S")
                 right = left + timedelta(minutes=cfg.time.time_interval)
-                
-                item = dict(tollgate_id=tollgate, 
-                            time_window='[{},{})'.format(left, right), 
+
+                item = dict(tollgate_id=tollgate,
+                            time_window='[{},{})'.format(left, right),
                             direction=direction,
                             volume=volume)
                 volume_result.append(item)
 
     # save prediction
     traveltime_result = pd.DataFrame(traveltime_result, columns=['intersection_id','tollgate_id','time_window','avg_travel_time'] )
-    traveltime_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_travelTime.csv'.format(exp_name)), 
+    traveltime_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_travelTime.csv'.format(exp_name)),
                             sep=',', header=True,index=False)
     volume_result = pd.DataFrame(volume_result, columns=['tollgate_id','time_window','direction','volume'])
-    volume_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_volume.csv'.format(exp_name)), 
+    volume_result.to_csv(os.path.join(cfg.data.prediction_dir,'{}_volume.csv'.format(exp_name)),
                             sep=',', header=True,index=False)
     logging.info('Prediction Finished!')
     sess.close()
@@ -279,6 +280,3 @@ if __name__ == '__main__':
     logging.info("Check Arguments: {}".format(args))
     args.update_feature = bool(args.update_feature)
     pipeline(args)
-
-
-
