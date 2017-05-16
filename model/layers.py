@@ -3,12 +3,13 @@ import math
 import numpy as np
 
 from tensorflow.contrib.rnn import RNNCell
+from config import cfg
 
 def Graph_Convolution(data, out_dim, name):
     in_dim = data[0].get_shape()[1]
     result = []
+    W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim])
     for index, datum in enumerate(data):
-        W = tf.get_variable(name=name+'_weight{}'.format(index), shape=[in_dim, out_dim])
         tmp = tf.matmul(datum, W)
         if index == 0:
             result = tmp
@@ -17,6 +18,25 @@ def Graph_Convolution(data, out_dim, name):
     result = result / len(data)
     result = tf.nn.relu(result)
     return result
+
+
+def GC(data, out_dim, name):
+
+    in_dim = data['100'].get_shape()[1].value
+    result = {}
+    for node in cfg.model.link:
+        W = tf.get_variable(name=name+'{}_weight'.format(node), shape=[in_dim, out_dim])
+        for i in range(len(cfg.model.link[node])):
+            # W = tf.get_variable(name=name+'{}_{}_weight'.format(node,i), shape=[in_dim, out_dim])
+            if i == 0:
+                result[node] = tf.matmul(data[cfg.model.link[node][i]], W)
+            else:
+                result[node] = result[node] + tf.matmul(data[cfg.model.link[node][i]], W)
+        # result[node] =  tf.nn.sigmoid(result[node])
+    return result
+        # result[node] = tf.nn.relu(result[node] / len(cfg.model.link[node]))
+    # print (result['100'].get_shape()[1].value)
+    
 
 def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=False):
     """
@@ -86,7 +106,7 @@ class BNLSTMCell(RNNCell):
 
     @property
     def state_size(self):
-        return tf.nn.rnn_cell.LSTMStateTuple(self.num_units, self.num_units)
+        return (self.num_units, self.num_units)
 
     @property
     def output_size(self):
@@ -114,7 +134,7 @@ class BNLSTMCell(RNNCell):
                                                 epsilon=1E-3,
                                                 center=True,
                                                 scale=True,
-                                                fuse=True,
+                                                fused=True,
                                                 is_training=self.training,
                                                 scope='xh')
 
@@ -123,13 +143,13 @@ class BNLSTMCell(RNNCell):
                                                 epsilon=1E-3,
                                                 center=True,
                                                 scale=True,
-                                                fuse=True,
+                                                fused=True,
                                                 is_training=self.training,
                                                 scope='hh')
 
             hidden = bn_xh + bn_hh + bias
 
-            i, j, f, o = tf.split(1, 4, hidden)
+            i, j, f, o = tf.split(axis=1, num_or_size_splits = 4, value = hidden)
 
             new_c = c * tf.sigmoid(f) + tf.sigmoid(i) * tf.tanh(j)
             bn_new_c = tf.contrib.layers.batch_norm(new_c,
@@ -137,10 +157,10 @@ class BNLSTMCell(RNNCell):
                                                 epsilon=1E-3,
                                                 center=True,
                                                 scale=True,
-                                                fuse=True,
+                                                fused=True,
                                                 is_training=self.training,
                                                 scope='c')
 
             new_h = tf.tanh(bn_new_c) * tf.sigmoid(o)
 
-            return new_h, tf.nn.rnn_cell.LSTMStateTuple(new_c, new_h)
+            return new_h, (new_c, new_h)

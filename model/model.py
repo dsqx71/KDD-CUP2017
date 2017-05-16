@@ -15,13 +15,13 @@ def Build(input_size):
     timestep_interval = cfg.time.time_interval
     output_interval = 20
 
-    rnn_num_layers = 2
-    rnn_dim_hidden = 6
+    rnn_num_layers = 1
+    rnn_dim_hidden = 
 
-    graph_dim_hidden = 6
+    graph_dim_hidden = 4
 
     embedding_num = 72
-    embedding_feature_num = 2
+    embedding_feature_num = 1
 
     encoder_num_timesteps = 120 // timestep_interval
     decoder_num_timesteps = 120 // output_interval
@@ -68,23 +68,24 @@ def Build(input_size):
         inputs[node] = tf.placeholder(tf.float32, shape=(None, encoder_num_timesteps, input_size[node]), name = node)
         inputs[node] = tf.cond(is_training, 
                            lambda : inputs[node] + \
-                           tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.05) * inputs[node] + \
-                           tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.03),
+                           tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.005) * inputs[node] + \
+                           tf.random_normal(tf.shape(inputs[node]), mean=0, stddev=0.0001),
                            lambda : inputs[node])
         
         # LSTM Cell
-        encoder_single_cell_fw = tf.contrib.rnn.GRUCell(rnn_dim_hidden)
-        decoder_single_cell_fw = tf.contrib.rnn.GRUCell(rnn_dim_hidden)
+        encoder_single_cell_fw = tf.contrib.rnn.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) #tf.contrib.rnn.GRUCell(rnn_dim_hidden)
+        decoder_single_cell_fw = tf.contrib.rnn.BasicLSTMCell(rnn_dim_hidden, state_is_tuple=True) #tf.contrib.rnn.GRUCell(rnn_dim_hidden)
         
         encoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([encoder_single_cell_fw] * rnn_num_layers)
         decoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([decoder_single_cell_fw] * rnn_num_layers)
 
         states_fw[node] = encoder_nodes_fw[node].zero_state(tf.shape(inputs[node])[0], tf.float32)
-        shape = tf.stack([tf.shape(inputs[node])[0], rnn_dim_hidden + embedding_feature_num])
+        shape = tf.stack([tf.shape(inputs[node])[0], rnn_dim_hidden])
         output_fw[node] = [tf.fill(shape, 0.0)]
+        # output_fw[node] = encoder_nodes_fw[node].zero_state(tf.shape(inputs[node])[0], tf.float32)
 
     # Build Graph
-    with tf.variable_scope("Embedding", regularizer=tf.contrib.layers.l2_regularizer(0.3)):
+    with tf.variable_scope("Embedding", regularizer=tf.contrib.layers.l2_regularizer(0.1)):
         # Embedding of node
         for node in link:
             embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -0.5, 0.5), 
@@ -97,28 +98,49 @@ def Build(input_size):
     with tf.variable_scope("RNN", 
                             initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0, 
                                     mode='FAN_IN', uniform=False, seed=None, dtype=tf.float32),
-                            regularizer=tf.contrib.layers.l2_regularizer(0.05)):
+                            regularizer=tf.contrib.layers.l2_regularizer(0.2)):
 
         flags_rnn = {value : False for value in node_type.values()}
         for timestep in range(encoder_num_timesteps):
             time_now = (time + timestep) % embedding_num
+            
+            with tf.variable_scope('GC') as scope:
+                if timestep > 0:
+                    tf.get_variable_scope().reuse_variables()
+                tmp = {}          
+                for node in link:
+                    tmp[node] = output_fw[node][-1]
+                gc1 = GC(tmp, out_dim=graph_dim_hidden, name='GC1')
+                gc2 = GC(tmp, out_dim=graph_dim_hidden, name='GC2')
+                gc3 = GC(gc1, out_dim=graph_dim_hidden, name='GC3')
+                gc4 = GC(gc2, out_dim=graph_dim_hidden, name='GC4')
+                # gc5 = GC(gc3, out_dim=graph_dim_hidden, name='GC5')
+                # gc6 = GC(gc4, out_dim=graph_dim_hidden, name='GC6')
+                # gc7 = GC(gc5, out_dim=graph_dim_hidden, name='GC7')
+                # gc8 = GC(gc6, out_dim=graph_dim_hidden, name='GC8')
+                # gc9 = GC(gc6, out_dim=graph_dim_hidden, name='GC9')
+                gc = {}
+                for node in link:
+                    gc[node] = [gc1[node], gc2[node], gc3[node], gc4[node]]# gc7[node], gc8[node]]
+                    gc[node] = tf.concat(values=gc[node], axis=1)
+
             for node in link:
                 input_data = inputs[node][:, timestep, :]
                 embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)
                 embedding.set_shape([None, embedding_feature_num])
                 weather_now = weather[:, timestep, :]
-                data = tf.concat(axis=1, values=[input_data, embedding, weather_now])  
+                data = tf.concat(axis=1, values=[input_data, embedding, weather_now, gc[node]])  
 
                 # concat output of relevant nodes
-                with tf.variable_scope('Graph_Convolution_{}'.format(node)) as scope:
-                    if timestep > 0:
-                        tf.get_variable_scope().reuse_variables()
-                    link_feature = []
-                    for i in range(len(link[node])):
-                        link_feature.append(output_fw[link[node][i]][-1])
-                    GC = Graph_Convolution(link_feature, out_dim=graph_dim_hidden, name='GC')
+                # with tf.variable_scope('Graph_Convolution_{}'.format(node)) as scope:
+                #     if timestep > 0:
+                #         tf.get_variable_scope().reuse_variables()
+                #     link_feature = []
+                #     for i in range(len(link[node])):
+                #         link_feature.append(output_fw[link[node][i]][-1])
+                #     GC = Graph_Convolution(link_feature, out_dim=graph_dim_hidden, name='GC')
         
-                data = tf.concat(axis=1, values=[data, GC])
+                # data = tf.concat(axis=1, values=[data, GC])
                 
                 # RNN
                 with tf.variable_scope('Encoder-GRU-{}'.format(cfg.model.node_type[node]), 
@@ -128,7 +150,6 @@ def Build(input_size):
                     else:
                         flags_rnn[cfg.model.node_type[node]] = True
                     tmp, states_fw[node] = encoder_nodes_fw[node](data, states_fw[node])
-                    tmp = tf.concat(axis=1, values=[embedding, tmp])
                     output_fw[node].append(tmp)
                 flag = True
 
@@ -136,24 +157,45 @@ def Build(input_size):
         flag = False
         flags_rnn = {value : False for value in node_type.values()}
         for timestep in range(encoder_num_timesteps, encoder_num_timesteps+decoder_num_timesteps):
+
             time_now = (time + timestep) % embedding_num
+            with tf.variable_scope('GC') as scope:
+                if timestep > 0:
+                    tf.get_variable_scope().reuse_variables()
+                tmp = {}          
+                for node in link:
+                    tmp[node] = output_fw[node][-1]
+                gc1 = GC(tmp, out_dim=graph_dim_hidden, name='GC1')
+                gc2 = GC(tmp, out_dim=graph_dim_hidden, name='GC2')
+                gc3 = GC(gc1, out_dim=graph_dim_hidden, name='GC3')
+                gc4 = GC(gc2, out_dim=graph_dim_hidden, name='GC4')
+                # gc5 = GC(gc3, out_dim=graph_dim_hidden, name='GC5')
+                # gc6 = GC(gc4, out_dim=graph_dim_hidden, name='GC6')
+                # gc7 = GC(gc5, out_dim=graph_dim_hidden, name='GC7')
+                # gc8 = GC(gc6, out_dim=graph_dim_hidden, name='GC8')
+                # gc9 = GC(gc6, out_dim=graph_dim_hidden, name='GC9')
+                gc = {}
+                for node in link:
+                    gc[node] = [gc1[node], gc2[node], gc3[node], gc4[node]]# gc7[node], gc8[node]]
+                    gc[node] = tf.concat(values=gc[node], axis=1)
+            
             for node in link:
                 input_data = output_fw[node][-1]
                 embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)
                 embedding.set_shape([None, embedding_feature_num])                      
                 weather_now = weather[:, timestep, :]
-                data = tf.concat(axis=1, values=[input_data, embedding, weather_now])
+                data = tf.concat(axis=1, values=[input_data, embedding, weather_now, gc[node]])
                 
-                # concat output of relevant nodes
-                with tf.variable_scope('Graph_Convolution_{}'.format(node)) as scope:
-                    if timestep > 0:
-                        tf.get_variable_scope().reuse_variables()
-                    link_feature = []
-                    for i in range(len(link[node])):
-                        link_feature.append(output_fw[link[node][i]][-1])
-                    GC = Graph_Convolution(link_feature, out_dim=graph_dim_hidden, name='GC')
+                # # concat output of relevant nodes
+                # with tf.variable_scope('Graph_Convolution_{}'.format(node)) as scope:
+                #     if timestep > 0:
+                #         tf.get_variable_scope().reuse_variables()
+                #     link_feature = []
+                #     for i in range(len(link[node])):
+                #         link_feature.append(output_fw[link[node][i]][-1])
+                #     GC = Graph_Convolution(link_feature, out_dim=graph_dim_hidden, name='GC')
                 
-                data = tf.concat(axis=1, values=[data, GC])
+                # data = tf.concat(axis=1, values=[data, GC])
                 
                 # RNN
                 with tf.variable_scope('Decoder-GRU-{}'.format(cfg.model.node_type[node]), 
@@ -163,7 +205,6 @@ def Build(input_size):
                     else:
                         flags_rnn[cfg.model.node_type[node]] = True
                     tmp, states_fw[node] = encoder_nodes_fw[node](data, states_fw[node])
-                    tmp = tf.concat(axis=1, values=[embedding, tmp])
                     output_fw[node].append(tmp)
                 flag = True
 
@@ -171,14 +212,14 @@ def Build(input_size):
         prediction = {}
         task1_prediction = {}
         task2_prediction = {}
-        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l2_regularizer(0.01)):
+        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l2_regularizer(0.1)):
             for node in task1_output:
                 for i in range(2):
                     target = task1_output[node][i]
                     pred_result = []
                     with tf.variable_scope("{}_{}".format(node, target)):
                         for time in range(decoder_num_timesteps):
-                            data = []
+                            data = [output_fw[node][1+encoder_num_timesteps+time]]
                             # concat hidden layers of all revelent link
                             for path in route[node][i]:
                                 data.append(output_fw[str(path)][1+encoder_num_timesteps+time])
@@ -222,9 +263,9 @@ def Build(input_size):
             keys.sort()
             for key in keys:
                 if key.startswith('tollgate'):
-                    tmp = 1
+                    tmp = 0
                 else:
-                    tmp =  1
+                    tmp = 1
                 loss = L1_loss(data=prediction[key], label=labels[key], scale=loss_scale * tmp)
                 metric = L1_loss(data=prediction[key], label=labels[key], scale=1.0)    
                 

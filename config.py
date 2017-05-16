@@ -12,7 +12,7 @@ cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
-cfg.data.validation_ratio = 0.05
+cfg.data.validation_ratio = 0.03
 
 #### time
 cfg.time.time_interval = 20
@@ -78,9 +78,9 @@ coeff = 1.0
 
 for time in cfg.time.train_timeslots:
     tmp = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
-    coeff *= 1.0001
+    coeff *= 1.00002
     if (tmp.hour>=8 and tmp.hour<=10) or (tmp.hour>=17 and tmp.hour<=19):
-        cfg.model.loss_scale.append(5*coeff)
+        cfg.model.loss_scale.append(1*coeff)
     else:
         cfg.model.loss_scale.append(1*coeff)
 cfg.model.loss_scale.extend([0] * 12)
