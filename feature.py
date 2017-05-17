@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from config import cfg
 from util import ReadRawdata
 
-def TrajectoryBaiscFeature(trajectory):
+def TrajectoryBaiscFeature(trajectory, link):
 
     logging.info("Extracting basic features from trajectory rawdata...")
     trajectory_feature = {}
@@ -32,7 +32,6 @@ def TrajectoryBaiscFeature(trajectory):
                 trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][str(i)] = []
             now = now + timedelta(minutes=cfg.time.time_interval)
 
-        # TODO: add speed
         for i in range(len(data)):
             # columns : "intersection_id","tollgate_id","vehicle_id","starting_time","travel_seq","travel_time"
             intersection = data.iat[i, 0]
@@ -46,7 +45,6 @@ def TrajectoryBaiscFeature(trajectory):
 
             if starting_time < start_time + timedelta(hours=2):
                 # tollgate feature
-                # TODO: change key name
                 arrive_time = starting_time + timedelta(minutes=travel_time/60.0)
                 for item in [(arrive_time, 'arrive')]:
                     if item[0] >= start_time and item[0] < end_time:
@@ -54,7 +52,6 @@ def TrajectoryBaiscFeature(trajectory):
                         trajectory_feature[time][time_slot]['{}_{}'.format(tollgate, intersection)].append(travel_time)
 
                 # link feature
-                # TODO: add road information
                 for j in data.iat[i, 4].split(';'):
                     link_name, enter_time, travel_time = j.split('#')
                     link_name = link_name
@@ -109,14 +106,12 @@ def VolumeBasicFeature(data):
         time_slot = GetTimeslot(time)
         volume_feature[time_slot][tollgate + 'num_direction:{}'.format(direction)] = \
             volume_feature[time_slot].get(tollgate + 'num_direction:{}'.format(direction),0) + 1
-        volume_feature[time_slot][tollgate + 'num_vehicle_model:{}'.format(vehicle_model)] = \
-            volume_feature[time_slot].get(tollgate + 'num_vehicle_model:{}'.format(vehicle_model), 0) + 1
-        volume_feature[time_slot][tollgate + 'num_has_etc:{}'.format(has_etc)] = \
-            volume_feature[time_slot].get(tollgate + 'num_has_etc:{}'.format(has_etc), 0) + 1
-        volume_feature[time_slot][tollgate + 'num_vehicle_type:{}'.format(vehicle_type)] = \
-            volume_feature[time_slot].get(tollgate + 'num_vehicle_type:{}'.format(vehicle_type), 0) + 1
-        volume_feature[time_slot][tollgate + 'num'] = volume_feature[time_slot].get(tollgate + 'num', 0) + 1
-        volume_feature[time_slot][tollgate + 'data_miss'] = 0
+        volume_feature[time_slot][tollgate + 'num_vehicle_model:{}_direction:{}'.format(vehicle_model. direction)] = \
+            volume_feature[time_slot].get(tollgate + 'num_vehicle_model:{}_direction:{}'.format(vehicle_model. direction), 0) + 1
+        volume_feature[time_slot][tollgate + 'num_has_etc:{}_direction:{}'.format(has_etc, direction)] = \
+            volume_feature[time_slot].get(tollgate + 'num_has_etc:{}_direction:{}'.format(has_etc, direction), 0) + 1
+        volume_feature[time_slot][tollgate + 'num_vehicle_type:{}_direction:{}'.format(vehicle_type, direction)] = \
+            volume_feature[time_slot].get(tollgate + 'num_vehicle_type:{}_direction:{}'.format(vehicle_type, direction), 0) + 1
 
     dataframe = pd.DataFrame(volume_feature).T
     return dataframe
@@ -153,12 +148,22 @@ def LinkBasicFeature(link):
 
     link['link_id'] = link['link_id'].astype(str)
     link.set_index(['link_id'], inplace=True)
-    link.drop(['in_top','out_top'], axis=1, inplace=True)
+    link.drop(['in_top','out_top','lane_width','width'], axis=1, inplace=True)
+    attribute = {}
+    for intersection in cfg.model.task1_output:
+        for index, tollgate in cfg.model.task1_output[intersection]:
+            length = 0
+            for item in cfg.model.route[intersection][index]:
+                if item in link.index:
+                    length += link.loc[item]['length']
+            attribute['{}_{}_length_attribute'.format(intersection, tollgate)] = length
 
     link_feature = {}
+    link['length_div_lanes'] = link['length'] / link['lanes']
     for column in link.columns:
         for index in link.index:
-            link_feature['{}_{}'.format(index, column)] = link[column][index]
+            link_feature['{}_{}_attribute'.format(index, column)] = link[column][index]
+    link_feature.update(length)
     link_feature = pd.Series(link_feature)
 
     return link_feature
@@ -177,7 +182,7 @@ def PreprocessingRawdata(update_feature=False):
     else:
         trajectory, volume, weather, link, route = ReadRawdata()
 
-        trajectory_feature = TrajectoryBaiscFeature(trajectory)
+        trajectory_feature = TrajectoryBaiscFeature(trajectory, link)
         volume_feature = VolumeBasicFeature(volume)
         weather_feature = WeatherBasicFeature(weather)
         link_feature = LinkBasicFeature(link)
@@ -209,15 +214,12 @@ def GetLabels(data):
     label = {}
     for intersection in cfg.model.task1_output:
         for tollgate in cfg.model.task1_output[intersection]:
-            # TODO: check
-            label['{}_{}'.format(intersection, tollgate)]  = data.minor_xs('{}_{}_50%'.format(intersection, tollgate)).iloc[6:].T
+            label['{}_{}'.format(intersection, tollgate)]  = data.minor_xs('{}_{}_mean'.format(intersection, tollgate)).iloc[6:].T
 
     for tollgate in cfg.model.task2_output:
         for direction in range(cfg.model.task2_output[tollgate]):
             label['{}_{}'.format(tollgate, direction)] = data.minor_xs('{}_volumnnum_direction:{}'.format(tollgate, direction)).iloc[6:].T
-
     label = pd.Panel(label)
-
     return label
 
 def SplitData(data, label):
@@ -247,10 +249,9 @@ def Standardize(data):
     data : Pandas Panel
     """
     mean = data.mean(axis=0)
-    std = data.std(axis=0)
+    std  = data.std(axis=0)
 
     mask = (std == 0)
-    mean[mask] = 0
     std[mask] = 1
 
     data = data.subtract(mean, axis=0)

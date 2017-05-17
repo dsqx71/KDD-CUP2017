@@ -19,9 +19,9 @@ def Graph_Convolution(data, out_dim, name):
     result = tf.nn.relu(result)
     return result
 
-
 def GC(data, out_dim, name):
-    in_dim = data[data.keys()[0]].get_shape()[1].value
+
+    in_dim = data[list(data.keys())[0]].get_shape()[1].value
     result = {}
     W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim])
     for node in cfg.model.link:
@@ -30,10 +30,8 @@ def GC(data, out_dim, name):
                 result[node] = tf.matmul(data[cfg.model.link[node][i]], W)
             else:
                 result[node] = result[node] + tf.matmul(data[cfg.model.link[node][i]], W)
-        result[node] = result[node] / len(cfg.model.link[node]
+        result[node] = result[node] / len(cfg.model.link[node])
     return result
-
-
 
 def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=False):
     """

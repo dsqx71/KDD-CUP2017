@@ -17,10 +17,10 @@ def Build(input_size):
 
     window_num = 2
 
-    graph_dim_hidden = 5
+    graph_dim_hidden = 3
 
     embedding_num = 72
-    embedding_feature_num = 5
+    embedding_feature_num = 1
 
     encoder_num_timesteps = 120 // timestep_interval
     decoder_num_timesteps = 120 // output_interval
@@ -80,8 +80,12 @@ def Build(input_size):
                            lambda : inputs[node])
 
         # LSTM Cell
-        encoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.GRUCell(4), tf.contrib.rnn.GRUCell(4), tf.contrib.rnn.GRUCell(2)])
-        decoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.GRUCell(4), tf.contrib.rnn.GRUCell(4), tf.contrib.rnn.GRUCell(2)])
+        if 'tollgate' in node or node.startswith('A') or node.startswith('B') or node.startswith('C'):
+            encoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.GRUCell(8), tf.contrib.rnn.GRUCell(2)])
+            decoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.GRUCell(8), tf.contrib.rnn.GRUCell(2)])
+        else:
+            encoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.GRUCell(2)])
+            decoder_nodes_fw[node] = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.GRUCell(2)])
 
         states_fw[node] = encoder_nodes_fw[node].zero_state(tf.shape(inputs[node])[0], tf.float32)
         shape = tf.stack([tf.shape(inputs[node])[0], 2])
@@ -90,7 +94,7 @@ def Build(input_size):
 
     # Build Graph
     with tf.variable_scope("Embedding",
-                           regularizer=tf.contrib.layers.l2_regularizer(0.0001)):
+                           regularizer=tf.contrib.layers.l1_regularizer(0.05)):
         # Embedding of node
         for node in link:
             embeddings[node] = tf.Variable(tf.random_uniform([embedding_num, embedding_feature_num], -0.03, 0.03),
@@ -100,8 +104,8 @@ def Build(input_size):
     flag = False
     flags = {value : False for value in node_type.values()}
     with tf.variable_scope("RNN",
-                           initializer=tf.orthogonal_initializer(gain=1.41)
-                           regularizer=tf.contrib.layers.l2_regularizer(0.001)):
+                           initializer=tf.orthogonal_initializer(gain=1.41),
+                           regularizer=tf.contrib.layers.l1_regularizer(0.15)):
 
         flags_rnn = {value : False for value in node_type.values()}
         for timestep in range(encoder_num_timesteps):
@@ -159,11 +163,10 @@ def Build(input_size):
                         gc[node] = tf.concat(values=gc[node], axis=1)
 
                 for node in link:
-                    input_data = output_fw[node][-1]
                     embedding  = tf.nn.embedding_lookup(embeddings[node], time_now)
                     embedding.set_shape([None, embedding_feature_num])
                     weather_now = weather[:, timestep, :]
-                    data = tf.concat(axis=1, values=[input_data, embedding, weather_now, gc[node]])
+                    data = tf.concat(axis=1, values=[embedding, weather_now, gc[node]])
                     # RNN
                     with tf.variable_scope('Decoder-GRU-{}'.format(cfg.model.node_type[node]),
                                            initializer=tf.orthogonal_initializer(gain=1.41)) as scope:
@@ -179,7 +182,7 @@ def Build(input_size):
         prediction = {}
         task1_prediction = {}
         task2_prediction = {}
-        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l1_regularizer(0.01)):
+        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l1_regularizer(0.5)):
             for node in task1_output:
                 for i in range(2):
                     target = task1_output[node][i]
@@ -228,7 +231,7 @@ def Build(input_size):
             keys.sort()
             for key in keys:
                 if key.startswith('tollgate'):
-                    tmp = 0.1
+                    tmp = 0
                 else:
                     tmp = 1
                 loss = L1_loss(data=prediction[key], label=labels[key], scale=loss_scale * tmp)

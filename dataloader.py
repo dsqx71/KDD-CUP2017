@@ -8,8 +8,8 @@ import pandas as pd
 DataBatch = namedtuple('DataBatch', ['data', 'label','aux'])
 
 class DataLoader(object):
-    
-    def __init__(self, data, label, batchsize, time, mode, total_epoch=None): 
+
+    def __init__(self, data, label, batchsize, time, mode, total_epoch=None):
         # setting
         data = data.fillna(0)
         label = label.fillna(-1)
@@ -24,12 +24,11 @@ class DataLoader(object):
         # input data
         for key in list(cfg.model.link.keys()) + ['weather']:
             index = [item for item in data.minor_axis if item.startswith(key)]
-            if key =='weather':
-                continue
-                # self.data[key] = data.loc[:, : , index].values
+            if key == 'weather':
+                self.data[key] = data.loc[:, : , index].values
             else:
                 self.data[key] = data.loc[:, :5, index].values
-        # label 
+        # label
         for key in label:
             self.label[key] = label[key].values
 
@@ -47,7 +46,7 @@ class DataLoader(object):
                                if self.time[item] == (6*60//cfg.time.time_interval) or self.time[item] == (15*60//cfg.time.time_interval)]
         # elif  mode == 'validation':
         #     self.list_index = [item for item in range(self.data_num) \
-        #                        if (self.time[item] >= (5*60//cfg.time.time_interval) and self.time[item] <= (7*60//cfg.time.time_interval)) or  
+        #                        if (self.time[item] >= (5*60//cfg.time.time_interval) and self.time[item] <= (7*60//cfg.time.time_interval)) or
         #                           (self.time[item] >= (14*60//cfg.time.time_interval) and self.time[item] <= (16*60//cfg.time.time_interval))]
         elif mode == 'train':
             self.list_index1 = [item for item in range(self.data_num)]
@@ -55,7 +54,7 @@ class DataLoader(object):
                                if self.time[item] == (6*60//cfg.time.time_interval) or self.time[item] == (15*60//cfg.time.time_interval)]
             self.list_index = self.list_index1 + self.list_index2 * 50
         else:
-            raise ValueError("The mode doesn't exist")        
+            raise ValueError("The mode doesn't exist")
         self.data_num = len(self.list_index)
         if mode == 'train':
             self.loss_scale = np.array(cfg.model.loss_scale)
@@ -64,18 +63,13 @@ class DataLoader(object):
 
     def __iter__(self):
         return self
-    
+
     def reset(self):
         self.current_epoch +=1
         if self.mode == 'train':
-            # if self.current_epoch < 5:
-            #     self.list_index = self.list_index2
-            # else:
-            self.list_index = self.list_index1
-            self.data_num = len(self.list_index)
             shuffle(self.list_index)
         self.index = 0
-    
+
     def getdata(self, list_index):
         data = {}
         if self.mode == 'train':
@@ -87,16 +81,15 @@ class DataLoader(object):
             data[key + ':0'] = self.data[key][list_index]
         data['time'+':0'] = self.time[list_index]
         return data
-    
+
     def getlabel(self, list_index):
         if self.mode == 'test':
             return None
         label = {}
         for key in self.label:
-            # if 'A' in key or 'B' in key or 'C' in key:
             label[key+':0'] = self.label[key][list_index]
         return label
-    
+
     def __next__(self):
         if self.index + self.batchsize > self.data_num:
             raise StopIteration
@@ -104,6 +97,6 @@ class DataLoader(object):
             current_index = self.list_index[self.index: self.index + self.batchsize]
             aux = self.list_index[self.index]
             self.index += self.batchsize
-            return DataBatch(data=self.getdata(current_index), 
+            return DataBatch(data=self.getdata(current_index),
                              label=self.getlabel(current_index),
                              aux=aux)
