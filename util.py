@@ -68,4 +68,8 @@ def ReadRawdata():
 
 def GetDataNum(num):
 
-    return num - 4 * 60 // cfg.time.time_interval + 1 
+    return num - 4 * 60 // cfg.time.time_interval + 1
+
+def GetTotalSecond(date):
+
+    return (date - datetime(2000, 1, 1)).total_seconds()

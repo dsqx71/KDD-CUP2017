@@ -5,9 +5,9 @@ import pandas as pd
 from util import GetTimeslot
 from datetime import datetime, timedelta
 from config import cfg
-from util import ReadRawdata
+from util import ReadRawdata, GetTotalSecond
 
-def TrajectoryBaiscFeature(trajectory, link):
+def TrajectoryBaiscFeature(trajectory):
 
     logging.info("Extracting basic features from trajectory rawdata...")
     trajectory_feature = {}
@@ -23,11 +23,13 @@ def TrajectoryBaiscFeature(trajectory, link):
 
         trajectory_feature[time] = {}
         now = start_time
+
         for step in range(4*60//cfg.time.time_interval):
-            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = {'A_tollgate2':[], 'A_tollgate3':[], 'B_tollgate1':[],
-                                                                           'B_tollgate3':[], 'C_tollgate1':[], 'C_tollgate3':[],
-                                                                           'tollgate2_A':[], 'tollgate3_A':[], 'tollgate1_B':[],
-                                                                           'tollgate3_B':[], 'tollgate1_C':[], 'tollgate3_C':[]}
+            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = \
+                          {'A_tollgate2':[], 'A_tollgate3':[], 'B_tollgate1':[],
+                           'B_tollgate3':[], 'C_tollgate1':[], 'C_tollgate3':[],
+                           'tollgate2_A':[], 'tollgate3_A':[], 'tollgate1_B':[],
+                           'tollgate3_B':[], 'tollgate1_C':[], 'tollgate3_C':[]}
             for i in range(100, 124):
                 trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][str(i)] = []
             now = now + timedelta(minutes=cfg.time.time_interval)
@@ -41,15 +43,17 @@ def TrajectoryBaiscFeature(trajectory, link):
 
             # intersection feature and label
             time_slot = GetTimeslot(starting_time)
-            trajectory_feature[time][time_slot]['{}_{}'.format(intersection, tollgate)].append(travel_time)
+            total_second = GetTotalSecond(starting_time)
+            trajectory_feature[time][time_slot]['{}_{}'.format(intersection, tollgate)].append([total_second, travel_time])
 
             if starting_time < start_time + timedelta(hours=2):
                 # tollgate feature
-                arrive_time = starting_time + timedelta(minutes=travel_time/60.0)
+                arrive_time = starting_time + timedelta(minutes=travel_time / 60.0)
                 for item in [(arrive_time, 'arrive')]:
                     if item[0] >= start_time and item[0] < end_time:
                         time_slot = GetTimeslot(item[0])
-                        trajectory_feature[time][time_slot]['{}_{}'.format(tollgate, intersection)].append(travel_time)
+                        total_second = GetTotalSecond(arrive_time)
+                        trajectory_feature[time][time_slot]['{}_{}'.format(tollgate, intersection)].append([total_second, travel_time])
 
                 # link feature
                 for j in data.iat[i, 4].split(';'):
@@ -60,16 +64,32 @@ def TrajectoryBaiscFeature(trajectory, link):
                     for item in [(enter_time, 'enter_time')]:
                         if  item[0] >= start_time and item[0]< end_time:
                             time_slot = GetTimeslot(item[0])
-                            trajectory_feature[time][time_slot][link_name].append(travel_time)
+                            total_second = GetTotalSecond(enter_time)
+                            trajectory_feature[time][time_slot][link_name].append([total_second, travel_time])
 
         now = start_time
         for step in range(4*60//cfg.time.time_interval):
-            data = pd.Series([])
+            data = {}
             for key in trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")]:
-                tmp = pd.Series(trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][key]).describe()
-                tmp.index = ['{}_{}'.format(key, index) for index in tmp.index]
-                data = data.append(tmp)
-            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = data
+                if key.startswith('tollgate'):
+                    data[key+'_count'] = len(trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][key])
+                else:
+                    if len(trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][key]) > 0:
+                        df = pd.DataFrame(trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")][key]).sort_values(by=0, axis=1)
+                        diff = df.diff(periods=-1)
+                        tmp = df[1].describe()
+                        tmp.index = ['{}_{}'.format(key, index) for index in tmp.index]
+                        data.update(tmp.to_dict())
+
+                        tmp = diff[1].describe()
+                        tmp.index = ['{}_{}_TravelTime_diff'.format(key, index) for index in tmp.index]
+                        data.update(tmp.to_dict())
+
+                        tmp = diff[0].describe()
+                        tmp.index = ['{}_{}_EnterTime_diff'.format(key, index) for index in tmp.index]
+                        data.update(tmp.to_dict())
+
+            trajectory_feature[time][now.strftime("%Y-%m-%d %H:%M:%S")] = pd.Series(data)
             now = now + timedelta(minutes=cfg.time.time_interval)
 
     # convert to Pandas DataFrame
@@ -97,7 +117,7 @@ def VolumeBasicFeature(data):
     for i in range(len(data)):
         # columns : time tollgate_id direction vehicle_model has_etc vehicle_type
         time = data.iat[i, 0]
-        tollgate = 'tollgate{}'.format(data.iat[i, 1]) + '_volumn'
+        tollgate = 'tollgate{}'.format(data.iat[i, 1]) + '_volume'
         direction = data.iat[i, 2]
         vehicle_model = data.iat[i, 3]
         has_etc = data.iat[i, 4]
@@ -145,27 +165,15 @@ def WeatherBasicFeature(weather, time_interval=cfg.time.time_interval):
 def LinkBasicFeature(link):
 
     logging.info("Extracting basic features from link rawdata...")
-
     link['link_id'] = link['link_id'].astype(str)
     link.set_index(['link_id'], inplace=True)
     link.drop(['in_top','out_top','lane_width','width'], axis=1, inplace=True)
-    attribute = {}
-    for intersection in cfg.model.task1_output:
-        for index, tollgate in cfg.model.task1_output[intersection]:
-            length = 0
-            for item in cfg.model.route[intersection][index]:
-                if item in link.index:
-                    length += link.loc[item]['length']
-            attribute['{}_{}_length_attribute'.format(intersection, tollgate)] = length
-
-    link_feature = {}
     link['length_div_lanes'] = link['length'] / link['lanes']
+    link_feature = {}
     for column in link.columns:
         for index in link.index:
             link_feature['{}_{}_attribute'.format(index, column)] = link[column][index]
-    link_feature.update(length)
     link_feature = pd.Series(link_feature)
-
     return link_feature
 
 def PreprocessingRawdata(update_feature=False):
@@ -182,7 +190,7 @@ def PreprocessingRawdata(update_feature=False):
     else:
         trajectory, volume, weather, link, route = ReadRawdata()
 
-        trajectory_feature = TrajectoryBaiscFeature(trajectory, link)
+        trajectory_feature = TrajectoryBaiscFeature(trajectory)
         volume_feature = VolumeBasicFeature(volume)
         weather_feature = WeatherBasicFeature(weather)
         link_feature = LinkBasicFeature(link)
@@ -193,7 +201,6 @@ def PreprocessingRawdata(update_feature=False):
             timeslots = data[time].index
             for index in link_feature.index:
                 data[time][index] = link_feature[index]
-
             data[time] = pd.concat([data[time], weather_feature.loc[timeslots], volume_feature.loc[timeslots]], axis=1).reset_index(drop=True)
 
         data = pd.Panel(data)

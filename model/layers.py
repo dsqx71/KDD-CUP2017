@@ -5,22 +5,15 @@ import numpy as np
 from tensorflow.contrib.rnn import RNNCell
 from config import cfg
 
+def prelu(_x, name):
+  alphas = tf.get_variable(name + '_alpha', _x.get_shape()[-1],
+                           initializer=tf.constant_initializer(0.0),
+                           dtype=tf.float32)
+  pos = tf.nn.relu(_x)
+  neg = alphas * (_x - abs(_x)) * 0.5
+  return pos + neg
+
 def Graph_Convolution(data, out_dim, name):
-    in_dim = data[0].get_shape()[1]
-    result = []
-    W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim])
-    for index, datum in enumerate(data):
-        tmp = tf.matmul(datum, W)
-        if index == 0:
-            result = tmp
-        else:
-            result = result + tmp
-    result = result / len(data)
-    result = tf.nn.relu(result)
-    return result
-
-def GC(data, out_dim, name):
-
     in_dim = data[list(data.keys())[0]].get_shape()[1].value
     result = {}
     W = tf.get_variable(name=name+'_weight', shape=[in_dim, out_dim])
@@ -30,10 +23,10 @@ def GC(data, out_dim, name):
                 result[node] = tf.matmul(data[cfg.model.link[node][i]], W)
             else:
                 result[node] = result[node] + tf.matmul(data[cfg.model.link[node][i]], W)
-        result[node] = result[node] / len(cfg.model.link[node])
+        result[node] = prelu(result[node] / len(cfg.model.link[node]), name = name + '_prelu')
     return result
 
-def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=False):
+def FC(x, in_dim, out_dim, name, activation='prelu', is_training=True, with_bn=False):
     """
     Fully connect
     """
@@ -60,36 +53,10 @@ def FC(x, in_dim, out_dim, name, activation='relu', is_training=True, with_bn=Fa
     elif activation == 'sigmoid':
         y = tf.nn.sigmoid(y, name=name + '_sigmoid')
 
+    elif activation == 'prelu':
+        y = prelu(y, name = name + '_prelu')
+
     return y
-
-def MultiLayerFC(name, data, in_dim, out_dim, num_hidden, num_layer, activation='relu', is_training=True):
-
-    if num_layer > 1:
-        data = FC(data, in_dim=in_dim, out_dim=num_hidden, name='{}_fc0'.format(name),
-                activation=activation, is_training=is_training)
-
-        for i in range(1, num_layer-1):
-             data= FC(data, in_dim = num_hidden, out_dim = num_hidden, name = '{}_fc{}'.format(name, i),
-                activation=activation, is_training=is_training)
-
-        data = FC(data, in_dim=num_hidden, out_dim=out_dim, name='{}_fc{}'.format(name, num_layer-1),
-            activation=activation, is_training=is_training)
-
-    elif num_layer == 1:
-        data = FC(data, in_dim=in_dim, out_dim=out_dim, name='{}_fc0'.format(name),
-            activation=activation, is_training=is_training)
-
-    return data
-
-def shortcut(data, out_dim, name, dropout_prob=None):
-
-    if dropout_prob is not None:
-        data = tf.nn.dropout(data, keep_prob=1 - dropout_prob)
-    data0 = data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = out_dim, name=name + 'fc1')
-    data = FC(x=data, in_dim=data.get_shape()[1].value, out_dim = out_dim, name=name + 'fc2')
-    data = data + data0
-
-    return data
 
 class BNLSTMCell(RNNCell):
     """

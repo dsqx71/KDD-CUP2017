@@ -12,7 +12,7 @@ cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
-cfg.data.validation_ratio = 0.03
+cfg.data.validation_ratio = 0.10
 
 #### time
 cfg.time.time_interval = 20
@@ -23,7 +23,6 @@ cfg.time.trajectory_train_end   = datetime.strptime("2016-10-18 00:00:00", "%Y-%
 cfg.time.trajectory_totalmin = (cfg.time.trajectory_train_end - cfg.time.trajectory_train_start).total_seconds() / 60
 cfg.time.trajectory_slots = cfg.time.trajectory_totalmin / cfg.time.time_interval
 
-
 # volume time range
 cfg.time.volume_train_start = datetime.strptime("2016-09-19 00:00:00", "%Y-%m-%d %H:%M:%S")
 cfg.time.volume_train_end   = datetime.strptime("2016-10-18 00:00:00", "%Y-%m-%d %H:%M:%S")
@@ -31,6 +30,7 @@ cfg.time.volume_totalmin = (cfg.time.volume_train_end - cfg.time.volume_train_st
 cfg.time.volume_slots = cfg.time.volume_totalmin / cfg.time.time_interval
 
 cfg.time.festival = ["2016-09-{}".format(item) for item in range(15, 18)] + ["2016-10-{}".format(item) for item in range(1, 8)]
+
 # testing timeslots
 cfg.time.test_timeslots = []
 
@@ -57,7 +57,6 @@ cfg.time.all_timeslots.extend(cfg.time.test_timeslots)
 validation_start = len(cfg.time.train_timeslots) - int(cfg.data.validation_ratio * len(cfg.time.train_timeslots))
 cfg.time.validation_timeslots = cfg.time.train_timeslots[validation_start:]
 cfg.time.train_timeslots = cfg.time.train_timeslots[:validation_start]
-# cfg.time.train_timeslots = cfg.time.train_timeslots[3000:]
 
 cfg.time.validation_timeslots.sort()
 cfg.time.train_timeslots.sort()
@@ -78,11 +77,11 @@ coeff = 1.0
 
 for time in cfg.time.train_timeslots:
     tmp = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
-    coeff *= 1.00002
+    coeff *= 1.000005
     if (tmp.hour>=8 and tmp.hour<=10) or (tmp.hour>=17 and tmp.hour<=19):
         cfg.model.loss_scale.append(1*coeff)
     else:
-        cfg.model.loss_scale.append(1*coeff)
+        cfg.model.loss_scale.append(0.9*coeff)
 cfg.model.loss_scale.extend([0] * 12)
 cfg.model.loss_scale = np.array(cfg.model.loss_scale)
 
@@ -158,10 +157,8 @@ cfg.model.node_type = {# links
              'B': '2',
              'C': '3',
              'tollgate1':'4',
-             'tollgate2':'5',
-             'tollgate3':'6'}
-
-
+             'tollgate2':'4',
+             'tollgate3':'4'}
 
 # output
 cfg.model.task1_output = {'A': ['tollgate2', 'tollgate3'],

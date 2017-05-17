@@ -15,7 +15,7 @@ def Build(input_size):
     timestep_interval = cfg.time.time_interval
     output_interval = 20
 
-    window_num = 2
+    window_num = 1
 
     graph_dim_hidden = 3
 
@@ -52,7 +52,7 @@ def Build(input_size):
             labels[label_name] = tf.cond(is_training,
                            lambda : labels[label_name] + \
                            tf.random_normal(tf.shape(labels[label_name]), mean=0, stddev=0.01) * labels[label_name] + \
-                           tf.random_normal(tf.shape(labels[label_name]), mean=0, stddev=0.05),
+                           tf.random_normal(tf.shape(labels[label_name]), mean=0, stddev=0.1),
                            lambda : labels[label_name])
             label_out.append(labels[label_name])
 
@@ -69,6 +69,11 @@ def Build(input_size):
     ### Input data and RNN cell
     time = tf.placeholder(tf.int32, shape=(None), name = 'time')
     weather = tf.placeholder(tf.float32, shape=(None, encoder_num_timesteps + decoder_num_timesteps, input_size['weather']), name='weather')
+    weather = tf.cond(is_training,
+                       lambda : weather+ \
+                       tf.random_normal(tf.shape(weather), mean=0, stddev=0.03) * weather + \
+                       tf.random_normal(tf.shape(weather), mean=0, stddev=0.01),
+                       lambda : weather)
     embeddings = {}
     embedding_output = {}
     for node in link:
@@ -117,8 +122,8 @@ def Build(input_size):
                     tmp = {}
                     for node in link:
                         tmp[node] = output_fw[node][-1]
-                    gc1 = GC(tmp, out_dim=graph_dim_hidden, name='GC1')
-                    gc2 = GC(gc1, out_dim=graph_dim_hidden, name='GC2')
+                    gc1 = Graph_Convolution(tmp, out_dim=graph_dim_hidden, name='GC1')
+                    gc2 = Graph_Convolution(gc1, out_dim=graph_dim_hidden, name='GC2')
                     gc = {}
                     for node in link:
                         gc[node] = [gc2[node]]
@@ -155,8 +160,8 @@ def Build(input_size):
                     tmp = {}
                     for node in link:
                         tmp[node] = output_fw[node][-1]
-                    gc1 = GC(tmp, out_dim=graph_dim_hidden, name='GC1')
-                    gc2 = GC(gc1, out_dim=graph_dim_hidden, name='GC2')
+                    gc1 = Graph_Convolution(tmp, out_dim=graph_dim_hidden, name='GC1')
+                    gc2 = Graph_Convolution(gc1, out_dim=graph_dim_hidden, name='GC2')
                     gc = {}
                     for node in link:
                         gc[node] = [gc2[node]]
@@ -182,14 +187,14 @@ def Build(input_size):
         prediction = {}
         task1_prediction = {}
         task2_prediction = {}
-        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l1_regularizer(0.5)):
+        with tf.variable_scope("task1_net", regularizer=tf.contrib.layers.l1_regularizer(0.2)):
             for node in task1_output:
                 for i in range(2):
                     target = task1_output[node][i]
                     pred_result = []
                     with tf.variable_scope("{}_{}".format(node, target)):
                         for timestep in range(decoder_num_timesteps):
-                            data = output_fw[node][1+encoder_num_timesteps*window_num+(timestep)*window_num:1+encoder_num_timesteps*window_num+(timestep+1)*window_num]
+                            data = []
                             for path in route[node][i]:
                                 data.extend(output_fw[str(path)][1+encoder_num_timesteps*window_num+(timestep)*window_num:1+encoder_num_timesteps*window_num+(timestep+1)*window_num])
                             data = tf.concat(axis=1, values=data)
