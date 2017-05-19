@@ -23,7 +23,7 @@ def Graph_Convolution(data, out_dim, name):
                 result[node] = tf.matmul(data[cfg.model.link[node][i]], W)
             else:
                 result[node] = result[node] + tf.matmul(data[cfg.model.link[node][i]], W)
-        result[node] = prelu(result[node] / len(cfg.model.link[node]), name = name + '_prelu')
+        result[node] = prelu(result[node] / len(cfg.model.link[node]), name = name + node + '_prelu')
     return result
 
 def FC(x, in_dim, out_dim, name, activation='prelu', is_training=True, with_bn=False):

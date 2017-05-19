@@ -12,7 +12,7 @@ cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
-cfg.data.validation_ratio = 0.10
+cfg.data.validation_ratio = 0.03
 
 #### time
 cfg.time.time_interval = 20
@@ -157,8 +157,8 @@ cfg.model.node_type = {# links
              'B': '2',
              'C': '3',
              'tollgate1':'4',
-             'tollgate2':'4',
-             'tollgate3':'4'}
+             'tollgate2':'5',
+             'tollgate3':'6'}
 
 # output
 cfg.model.task1_output = {'A': ['tollgate2', 'tollgate3'],

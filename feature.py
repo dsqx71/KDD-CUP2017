@@ -126,8 +126,8 @@ def VolumeBasicFeature(data):
         time_slot = GetTimeslot(time)
         volume_feature[time_slot][tollgate + 'num_direction:{}'.format(direction)] = \
             volume_feature[time_slot].get(tollgate + 'num_direction:{}'.format(direction),0) + 1
-        volume_feature[time_slot][tollgate + 'num_vehicle_model:{}_direction:{}'.format(vehicle_model. direction)] = \
-            volume_feature[time_slot].get(tollgate + 'num_vehicle_model:{}_direction:{}'.format(vehicle_model. direction), 0) + 1
+        volume_feature[time_slot][tollgate + 'num_vehicle_model:{}_direction:{}'.format(vehicle_model, direction)] = \
+            volume_feature[time_slot].get(tollgate + 'num_vehicle_model:{}_direction:{}'.format(vehicle_model, direction), 0) + 1
         volume_feature[time_slot][tollgate + 'num_has_etc:{}_direction:{}'.format(has_etc, direction)] = \
             volume_feature[time_slot].get(tollgate + 'num_has_etc:{}_direction:{}'.format(has_etc, direction), 0) + 1
         volume_feature[time_slot][tollgate + 'num_vehicle_type:{}_direction:{}'.format(vehicle_type, direction)] = \
@@ -225,7 +225,7 @@ def GetLabels(data):
 
     for tollgate in cfg.model.task2_output:
         for direction in range(cfg.model.task2_output[tollgate]):
-            label['{}_{}'.format(tollgate, direction)] = data.minor_xs('{}_volumnnum_direction:{}'.format(tollgate, direction)).iloc[6:].T
+            label['{}_{}'.format(tollgate, direction)] = data.minor_xs('{}_volumenum_direction:{}'.format(tollgate, direction)).iloc[6:].T
     label = pd.Panel(label)
     return label
 
@@ -260,6 +260,7 @@ def Standardize(data):
 
     mask = (std == 0)
     std[mask] = 1
+    mean[mask] = 0
 
     data = data.subtract(mean, axis=0)
     data = data.div(std, axis=0)
