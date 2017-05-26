@@ -5,6 +5,12 @@ import numpy as np
 from tensorflow.contrib.rnn import RNNCell
 from config import cfg
 
+
+def conv(data, name, width, in_dim, out_dim, stride, pad):
+    filters = tf.get_variable(name=name+'_weight', shape=[width, in_dim, out_dim])
+    data = tf.nn.conv1d(value=data, filters=filters, stride=stride, padding=pad, data_format="NHWC")
+    return data
+
 def prelu(_x, name):
   alphas = tf.get_variable(name + '_alpha', _x.get_shape()[-1],
                            initializer=tf.constant_initializer(0.0),

@@ -21,7 +21,7 @@ class DataLoader(object):
         self.label = {}
         self.total_epoch = total_epoch
         self.current_epoch = 0
-
+        self.weekday = np.array([datetime.strptime(i, "%Y-%m-%d %H:%M:%S").isoweekday() for i in time]) - 1
         # input data
         for key in list(cfg.model.link.keys()) + ['weather']:
             index = [item for item in data.minor_axis if item.startswith(key) and 'attribute' not in item]
@@ -58,7 +58,9 @@ class DataLoader(object):
             self.list_index1 = [item for item in range(self.data_num)]
             self.list_index2 = [item for item in range(self.data_num) \
                                if self.time[item] == (6*60//cfg.time.time_interval) or self.time[item] == (15*60//cfg.time.time_interval)]
-            self.list_index = self.list_index1 + self.list_index2 * 20
+            self.list_index3 = [item for item in range(self.data_num) \
+                               if self.time[item] >= (6*60//cfg.time.time_interval) and self.time[item] <= (18*60//cfg.time.time_interval)]
+            self.list_index = self.list_index1 + self.list_index2 * 10 + self.list_index3 * 2
         else:
             raise ValueError("The mode doesn't exist")
         self.data_num = len(self.list_index)
@@ -89,6 +91,8 @@ class DataLoader(object):
             else:
                 data[key + ':0'] = self.data[key]
         data['time'+':0'] = self.time[list_index]
+        data['weekday'+':0'] = self.weekday[list_index]
+
         return data
 
     def getlabel(self, list_index):

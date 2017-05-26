@@ -1,6 +1,6 @@
 from config import cfg
 from datetime import datetime, timedelta
-from model import model
+from model import model2 as model
 
 import pipeline
 import util
@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import time
 import os
+import matplotlib.pyplot as plt
 
 def pipeline(args):
     ### Experiment setting
@@ -21,14 +22,14 @@ def pipeline(args):
     lr = args.lr
 
     exp_name = 'RNN-5-19-1'
-    num_epoch = 50
+    num_epoch = 8
 
     save_period = 200
     log_period = 50
-    lr_scheduler_period = 40
+    lr_scheduler_period = 30
 
-    lr_decay = 0.5
-    batchsize= 256
+    lr_decay = 0.1
+    batchsize= 4
     num_tf_thread = 8
     clip_grad = 0.1
 
@@ -154,11 +155,23 @@ def pipeline(args):
             #     optimizer = adam
             # else:
             #     optimizer = sgd
+            # for key in data:
+            #     try:
+            #         print (key, data[key].dtype, data[key].shape)
+            #     except:
+            #         print (key, type(data[key]))
             _, error, label_batch = sess.run([optimizer, metric, label_sym], feed_dict=data)
             mask = (label_batch == label_batch)
             # Update metric
             error_training = error_training + error.sum(0)
             count_training += mask.sum(0)
+
+            # for i in range(6):
+            #     plt.figure()
+            #     plt.plot(error.sum(0).reshape(11,6)[i*6:(i+1)*6])
+            #     plt.title(str(i))
+            #     plt.waitforbuttonpress()
+            #     plt.close()
 
             mask2 = (data['time:0'] ==18) | (data['time:0'] == 45)
             error_training_time = error_training_time + error[mask2].sum(0)
@@ -178,6 +191,13 @@ def pipeline(args):
             # Update metric
             error_validation = error_validation + error.sum(0)
             count_validation += mask.sum(0)
+
+            # for i in range(6):
+            #     plt.figure()
+            #     plt.plot(error.sum(0).reshape(11,6)[i*6:(i+1)*6])
+            #     plt.title(str(i))
+            #     plt.waitforbuttonpress()
+            #     plt.close()
 
         # Speend and Error
         logging.info("Epoch[{}] Speed:{:.2f} samples/sec [Travel Time] Training_all MAPE={:.5f} Training_time MAPE={:.5f} Validation_MAPE={:.5f}".format(epoch,

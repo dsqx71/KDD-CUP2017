@@ -12,32 +12,32 @@ cfg.data.rawdata_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/dataSets/
 cfg.data.feature_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/features/'
 cfg.data.checkpoint_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/checkpoint/'
 cfg.data.prediction_dir = 'C:/Users/user/PycharmProjects/KDDCup 2017/data/prediction/'
-cfg.data.validation_ratio = 0.03
+cfg.data.validation_ratio = 0.07
 
 #### time
 cfg.time.time_interval = 20
 
 # trajectory time range
 cfg.time.trajectory_train_start = datetime.strptime("2016-07-19 00:00:00", "%Y-%m-%d %H:%M:%S")
-cfg.time.trajectory_train_end   = datetime.strptime("2016-10-18 00:00:00", "%Y-%m-%d %H:%M:%S")
+cfg.time.trajectory_train_end   = datetime.strptime("2016-10-25 00:00:00", "%Y-%m-%d %H:%M:%S")
 cfg.time.trajectory_totalmin = (cfg.time.trajectory_train_end - cfg.time.trajectory_train_start).total_seconds() / 60
 cfg.time.trajectory_slots = cfg.time.trajectory_totalmin / cfg.time.time_interval
 
 # volume time range
 cfg.time.volume_train_start = datetime.strptime("2016-09-19 00:00:00", "%Y-%m-%d %H:%M:%S")
-cfg.time.volume_train_end   = datetime.strptime("2016-10-18 00:00:00", "%Y-%m-%d %H:%M:%S")
+cfg.time.volume_train_end   = datetime.strptime("2016-10-25 00:00:00", "%Y-%m-%d %H:%M:%S")
 cfg.time.volume_totalmin = (cfg.time.volume_train_end - cfg.time.volume_train_start).total_seconds() / 60
 cfg.time.volume_slots = cfg.time.volume_totalmin / cfg.time.time_interval
 
-cfg.time.festival = ["2016-09-{}".format(item) for item in range(15, 18)] + ["2016-10-{}".format(item) for item in range(1, 8)]
+cfg.time.festival = ["2016-09-{}".format(item) for item in range(15, 18)] + ["2016-10-{}".format(item) for item in range(1, 9)]
 
 # testing timeslots
 cfg.time.test_timeslots = []
 
-for i in range(18, 25):
+for i in range(25, 32):
     for k in ['06', '15']:
         left = datetime.strptime("2016-10-{} {}:00:00".format(i, k), "%Y-%m-%d %H:%M:%S")
-        for j in range(int(4*60/cfg.time.time_interval)):
+        for j in range(int(4 * 60 / cfg.time.time_interval)):
             cfg.time.test_timeslots.append(left.strftime("%Y-%m-%d %H:%M:%S"))
             left = left + timedelta(minutes=cfg.time.time_interval)
 
@@ -77,11 +77,22 @@ coeff = 1.0
 
 for time in cfg.time.train_timeslots:
     tmp = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
-    coeff *= 1.000005
+    coeff2 = 1.0
+    flag = False
+    for time2 in cfg.time.festival:
+        tmp2 = datetime.strptime(time2, "%Y-%m-%d")
+        if  (tmp2.month == tmp.month and tmp2.day == tmp.day):
+            flag = True
+            break
+    coeff *= 1.00003
+    if flag:
+        coeff2 = 0.8
+
     if (tmp.hour>=8 and tmp.hour<=10) or (tmp.hour>=17 and tmp.hour<=19):
-        cfg.model.loss_scale.append(1*coeff)
+        cfg.model.loss_scale.append(1*coeff*coeff2)
     else:
-        cfg.model.loss_scale.append(0.9*coeff)
+        cfg.model.loss_scale.append(0.9*coeff*coeff2)
+print (cfg.model.loss_scale[-12])
 cfg.model.loss_scale.extend([0] * 12)
 cfg.model.loss_scale = np.array(cfg.model.loss_scale)
 

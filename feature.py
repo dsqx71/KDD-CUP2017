@@ -5,7 +5,7 @@ import pandas as pd
 from util import GetTimeslot
 from datetime import datetime, timedelta
 from config import cfg
-from util import ReadRawdata, GetTotalSecond
+from util import ReadRawdata, ReadRawdata_Phase2, GetTotalSecond
 
 def TrajectoryBaiscFeature(trajectory):
 
@@ -188,7 +188,8 @@ def PreprocessingRawdata(update_feature=False):
         logging.info("Loading basic data from {}".format(data_file))
         data = pd.read_pickle(data_file)
     else:
-        trajectory, volume, weather, link, route = ReadRawdata()
+        # trajectory, volume, weather, link, route =  ReadRawdata()
+        trajectory, volume, weather, link, route =  ReadRawdata_Phase2()
 
         trajectory_feature = TrajectoryBaiscFeature(trajectory)
         volume_feature = VolumeBasicFeature(volume)

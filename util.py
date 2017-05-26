@@ -65,6 +65,48 @@ def ReadRawdata():
 
     return trajectory, volume, weather, link, route
 
+def ReadRawdata_Phase2():
+    """
+    read Rawdata
+
+    Returns
+    -------
+    trajectory, volume, weather, link, route : pandas.DataFrame
+    """
+    # time-independent data
+    rawdata_dir = cfg.data.rawdata_dir
+
+    link = pd.read_csv(os.path.join(rawdata_dir, 'training/links (table 3).csv'))
+    route = pd.read_csv(os.path.join(rawdata_dir, 'training/routes (table 4).csv'))
+
+    ### training rawdata
+
+    # Phase1
+    trajectory_train = pd.read_csv(os.path.join(rawdata_dir, 'training/trajectories(table 5)_training.csv'))
+    volume_train = pd.read_csv(os.path.join(rawdata_dir, 'training/volume(table 6)_training.csv'))
+    weather_train = pd.read_csv(os.path.join(rawdata_dir, 'training/weather (table 7)_training.csv'))
+
+    # Phase2
+    trajectory_train_phase2 = pd.read_csv(os.path.join(rawdata_dir, 'phase2/trajectories(table 5)_training2.csv'))
+    volume_train_phase2 = pd.read_csv(os.path.join(rawdata_dir, 'phase2/volume(table 6)_training2.csv'))
+    weather_train_phase2 = pd.read_csv(os.path.join(rawdata_dir, 'testing_phase1/weather (table 7)_test1.csv'))
+
+    ### testing rawdata
+    trajectory_test = pd.read_csv(os.path.join(rawdata_dir, 'phase2/trajectories(table 5)_test2.csv'))
+    volume_test = pd.read_csv(os.path.join(rawdata_dir, 'phase2/volume(table 6)_test2.csv'))
+    weather_test = pd.read_csv(os.path.join(rawdata_dir, 'phase2/weather (table 7)_2.csv'))
+
+    # concat train and test
+    trajectory = pd.concat([trajectory_train, trajectory_train_phase2, trajectory_test], ignore_index=True)
+    volume = pd.concat([volume_train, volume_train_phase2, volume_test], ignore_index=True)
+    weather = pd.concat([weather_train, weather_train_phase2, weather_test], ignore_index=True)
+    weather['hour'] = weather['hour'].astype(float)
+
+    # convert str to datetime
+    trajectory['starting_time'] = trajectory['starting_time'].map(lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S"))
+    volume['time'] = volume['time'].map(lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S"))
+
+    return trajectory, volume, weather, link, route
 
 def GetDataNum(num):
 
